@@ -57,6 +57,7 @@
   background-color: white;
   background-image: radial-gradient(circle, #ccc 1px, transparent 1px);
   background-size: 50px 50px;
+  background-position: 0 0;
   touch-action: none;
 }
 

@@ -20,6 +20,7 @@ function App() {
   const [lastPointerPos, setLastPointerPos] = useState({ x: 0, y: 0 })
   const [stageSize, setStageSize] = useState({ width: 800, height: 600 })
   const [touchMode, setTouchMode] = useState<'default' | 'draw'>('default')
+  const canvasContainerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const now = new Date()
@@ -66,6 +67,17 @@ function App() {
 
     return () => clearInterval(autoSave)
   }, [lines, memoTitle, memoId])
+
+  // 背景のドットを拡大縮小・移動と連動させる
+  useEffect(() => {
+    const container = canvasContainerRef.current
+    if (!container) return
+
+    const dotSpacing = 50
+    const scaledSpacing = dotSpacing * scale
+    container.style.backgroundSize = `${scaledSpacing}px ${scaledSpacing}px`
+    container.style.backgroundPosition = `${stagePos.x}px ${stagePos.y}px`
+  }, [scale, stagePos])
 
   const getPointerPosition = () => {
     const stage = stageRef.current
@@ -267,7 +279,7 @@ function App() {
           </div>
         </div>
       </div>
-      <div className="canvas-container">
+      <div className="canvas-container" ref={canvasContainerRef}>
         <Stage
           width={stageSize.width}
           height={stageSize.height}
