@@ -14,6 +14,8 @@ function App() {
   const [memoTitle, setMemoTitle] = useState('')
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [memoId, setMemoId] = useState<string>('')
+  const [scale, setScale] = useState(1)
+  const [stagePos, setStagePos] = useState({ x: 0, y: 0 })
 
   useEffect(() => {
     const now = new Date()
@@ -111,6 +113,46 @@ function App() {
     alert('保存しました')
   }
 
+  const handleWheel = (e: Konva.KonvaEventObject<WheelEvent>) => {
+    e.evt.preventDefault()
+    const scaleBy = 1.1
+    const oldScale = scale
+    const pointer = e.target.getStage()?.getPointerPosition()
+    if (!pointer) return
+
+    const mousePointTo = {
+      x: (pointer.x - stagePos.x) / oldScale,
+      y: (pointer.y - stagePos.y) / oldScale
+    }
+
+    const newScale = e.evt.deltaY > 0 ? oldScale * scaleBy : oldScale / scaleBy
+
+    setScale(newScale)
+    setStagePos({
+      x: pointer.x - mousePointTo.x * newScale,
+      y: pointer.y - mousePointTo.y * newScale
+    })
+  }
+
+  const handleZoomIn = () => {
+    const newScale = scale * 1.2
+    if (newScale <= 5) {
+      setScale(newScale)
+    }
+  }
+
+  const handleZoomOut = () => {
+    const newScale = scale / 1.2
+    if (newScale >= 0.2) {
+      setScale(newScale)
+    }
+  }
+
+  const handleResetZoom = () => {
+    setScale(1)
+    setStagePos({ x: 0, y: 0 })
+  }
+
   return (
     <div className="App">
       <div className="memo-header">
@@ -139,6 +181,11 @@ function App() {
           <input type="range" min="1" max="20" value={penWidth} onChange={(e) => setPenWidth(Number(e.target.value))} />
           <span>{penWidth}px</span>
         </div>
+        <div className="tool-group">
+          <button onClick={handleZoomIn}>+</button>
+          <button onClick={handleZoomOut}>-</button>
+          <button onClick={handleResetZoom}>リセット</button>
+        </div>
         <button onClick={() => setLines([])}>クリア</button>
         <button onClick={handleSave}>保存</button>
       </div>
@@ -146,12 +193,17 @@ function App() {
         <Stage
           width={800}
           height={600}
+          scaleX={scale}
+          scaleY={scale}
+          x={stagePos.x}
+          y={stagePos.y}
           onMouseDown={handleStart}
           onMousemove={handleMove}
           onMouseup={handleEnd}
           onTouchStart={handleStart}
           onTouchMove={handleMove}
           onTouchEnd={handleEnd}
+          onWheel={handleWheel}
           ref={stageRef}
         >
           <Layer>
