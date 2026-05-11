@@ -18,12 +18,35 @@ function App() {
   const [scale, setScale] = useState(1)
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 })
   const [lastPointerPos, setLastPointerPos] = useState({ x: 0, y: 0 })
+  const [stageSize, setStageSize] = useState({ width: 800, height: 600 })
+  const [touchMode, setTouchMode] = useState<'default' | 'draw'>('default')
 
   useEffect(() => {
     const now = new Date()
     const defaultTitle = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_`
     setMemoTitle(defaultTitle)
     setMemoId(Date.now().toString())
+
+    // ウィンドウサイズに合わせてStageのサイズを設定
+    const updateStageSize = () => {
+      setStageSize({
+        width: window.innerWidth,
+        height: window.innerHeight - 80 // ツールバーの分を引く
+      })
+    }
+
+    updateStageSize()
+    window.addEventListener('resize', updateStageSize)
+
+    // StageにPointer Eventsを設定
+    const stage = stageRef.current
+    if (stage) {
+      stage.container().style.touchAction = 'none'
+    }
+
+    return () => {
+      window.removeEventListener('resize', updateStageSize)
+    }
   }, [])
 
   useEffect(() => {
@@ -50,9 +73,19 @@ function App() {
     return stage.getPointerPosition()
   }
 
-  const handleStart = (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
-    // 中クリックまたはShift+クリックの場合はパンモード
-    if ('button' in e.evt && (e.evt.button === 1 || (e.evt.button === 0 && e.evt.shiftKey))) {
+  const handleStart = (e: Konva.KonvaEventObject<PointerEvent>) => {
+    const evt = e.evt
+
+    if (evt.pointerType === 'touch' && touchMode === 'default') {
+      isPanning.current = true
+      const pos = getPointerPosition()
+      if (pos) {
+        setLastPointerPos({ x: pos.x, y: pos.y })
+      }
+      return
+    }
+
+    if (evt.pointerType === 'mouse' && (evt.button === 1 || (evt.button === 0 && evt.shiftKey))) {
       isPanning.current = true
       const pos = getPointerPosition()
       if (pos) {
@@ -184,54 +217,68 @@ function App() {
 
   return (
     <div className="App">
-      <div className="memo-header">
-        {isEditingTitle ? (
-          <input
-            type="text"
-            value={memoTitle}
-            onChange={handleTitleChange}
-            onBlur={handleTitleBlur}
-            autoFocus
-            className="title-input"
-          />
-        ) : (
-          <h2 onClick={handleTitleClick} className="memo-title">
-            {memoTitle}
-          </h2>
-        )}
-      </div>
       <div className="toolbar">
-        <div className="tool-group">
-          <label>色:</label>
-          <input type="color" value={penColor} onChange={(e) => setPenColor(e.target.value)} />
+        <div className="toolbar-left">
+          {isEditingTitle ? (
+            <input
+              type="text"
+              value={memoTitle}
+              onChange={handleTitleChange}
+              onBlur={handleTitleBlur}
+              autoFocus
+              className="title-input"
+            />
+          ) : (
+            <h2 onClick={handleTitleClick} className="memo-title">
+              {memoTitle}
+            </h2>
+          )}
         </div>
-        <div className="tool-group">
-          <label>太さ:</label>
-          <input type="range" min="1" max="20" value={penWidth} onChange={(e) => setPenWidth(Number(e.target.value))} />
-          <span>{penWidth}px</span>
+        <div className="toolbar-right">
+          <div className="tool-group">
+            <label>色:</label>
+            <input type="color" value={penColor} onChange={(e) => setPenColor(e.target.value)} />
+          </div>
+          <div className="tool-group">
+            <label>太さ:</label>
+            <input type="range" min="1" max="20" value={penWidth} onChange={(e) => setPenWidth(Number(e.target.value))} />
+            <span>{penWidth}px</span>
+          </div>
+          <div className="tool-group">
+            <button onClick={handleZoomIn}>+</button>
+            <button onClick={handleZoomOut}>-</button>
+            <button onClick={handleResetZoom}>リセット</button>
+          </div>
+          <button onClick={() => setLines([])}>クリア</button>
+          <button onClick={handleSave}>保存</button>
+          <div className="tool-group">
+            <button 
+              className={touchMode === 'default' ? 'active' : ''}
+              onClick={() => setTouchMode('default')}
+            >
+              デフォルト
+            </button>
+            <button 
+              className={touchMode === 'draw' ? 'active' : ''}
+              onClick={() => setTouchMode('draw')}
+            >
+              描画
+            </button>
+          </div>
         </div>
-        <div className="tool-group">
-          <button onClick={handleZoomIn}>+</button>
-          <button onClick={handleZoomOut}>-</button>
-          <button onClick={handleResetZoom}>リセット</button>
-        </div>
-        <button onClick={() => setLines([])}>クリア</button>
-        <button onClick={handleSave}>保存</button>
       </div>
       <div className="canvas-container">
         <Stage
-          width={800}
-          height={600}
+          width={stageSize.width}
+          height={stageSize.height}
           scaleX={scale}
           scaleY={scale}
           x={stagePos.x}
           y={stagePos.y}
-          onMouseDown={handleStart}
-          onMousemove={handleMove}
-          onMouseup={handleEnd}
-          onTouchStart={handleStart}
-          onTouchMove={handleMove}
-          onTouchEnd={handleEnd}
+          onPointerDown={handleStart}
+          onPointerMove={handleMove}
+          onPointerUp={handleEnd}
+          onPointerCancel={handleEnd}
           onWheel={handleWheel}
           ref={stageRef}
         >
@@ -243,7 +290,7 @@ function App() {
         </Stage>
       </div>
       <div className="info">
-        <p>ヒント: 中クリックまたはShift+クリックで画面移動</p>
+        <p>ヒント: 中クリックまたはShift+クリックで画面移動 | デフォルトモード: 指でパン、2本指でズーム | 描画モード: 指で描画、2本指でパン・ズーム</p>
       </div>
     </div>
   )
