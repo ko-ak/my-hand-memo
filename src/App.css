@@ -3,6 +3,33 @@
   padding: 20px;
 }
 
+.memo-header {
+  margin-bottom: 20px;
+}
+
+.memo-title {
+  margin: 0;
+  cursor: pointer;
+  padding: 10px;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  transition: border-color 0.2s;
+}
+
+.memo-title:hover {
+  border-color: #ddd;
+}
+
+.title-input {
+  font-size: 1.5em;
+  font-weight: bold;
+  padding: 10px;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  text-align: center;
+  width: 300px;
+}
+
 .toolbar {
   display: flex;
   gap: 20px;

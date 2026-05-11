@@ -10,6 +10,14 @@ function App() {
   const [penColor, setPenColor] = useState('#000000')
   const [penWidth, setPenWidth] = useState(2)
   const [currentLine, setCurrentLine] = useState<Konva.LineConfig | null>(null)
+  const [memoTitle, setMemoTitle] = useState('')
+  const [isEditingTitle, setIsEditingTitle] = useState(false)
+
+  useEffect(() => {
+    const now = new Date()
+    const defaultTitle = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_`
+    setMemoTitle(defaultTitle)
+  }, [])
 
   const getPointerPosition = () => {
     const stage = stageRef.current
@@ -58,9 +66,36 @@ function App() {
     setCurrentLine(null)
   }
 
+  const handleTitleClick = () => {
+    setIsEditingTitle(true)
+  }
+
+  const handleTitleBlur = () => {
+    setIsEditingTitle(false)
+  }
+
+  const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setMemoTitle(e.target.value)
+  }
+
   return (
     <div className="App">
-      <h1>手書きメモアプリ</h1>
+      <div className="memo-header">
+        {isEditingTitle ? (
+          <input
+            type="text"
+            value={memoTitle}
+            onChange={handleTitleChange}
+            onBlur={handleTitleBlur}
+            autoFocus
+            className="title-input"
+          />
+        ) : (
+          <h2 onClick={handleTitleClick} className="memo-title">
+            {memoTitle}
+          </h2>
+        )}
+      </div>
       <div className="toolbar">
         <div className="tool-group">
           <label>色:</label>
