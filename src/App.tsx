@@ -7,6 +7,7 @@ import './App.css'
 function App() {
   const [lines, setLines] = useState<LineConfig[]>([])
   const isDrawing = useRef(false)
+  const isPanning = useRef(false)
   const stageRef = useRef<Konva.Stage>(null)
   const [penColor, setPenColor] = useState('#000000')
   const [penWidth, setPenWidth] = useState(2)
@@ -16,6 +17,7 @@ function App() {
   const [memoId, setMemoId] = useState<string>('')
   const [scale, setScale] = useState(1)
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 })
+  const [lastPointerPos, setLastPointerPos] = useState({ x: 0, y: 0 })
 
   useEffect(() => {
     const now = new Date()
@@ -48,7 +50,17 @@ function App() {
     return stage.getPointerPosition()
   }
 
-  const handleStart = () => {
+  const handleStart = (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
+    // 中クリックまたはShift+クリックの場合はパンモード
+    if ('button' in e.evt && (e.evt.button === 1 || (e.evt.button === 0 && e.evt.shiftKey))) {
+      isPanning.current = true
+      const pos = getPointerPosition()
+      if (pos) {
+        setLastPointerPos({ x: pos.x, y: pos.y })
+      }
+      return
+    }
+
     isDrawing.current = true
     const pos = getPointerPosition()
     if (!pos) return
@@ -66,6 +78,22 @@ function App() {
   }
 
   const handleMove = () => {
+    if (isPanning.current) {
+      const pos = getPointerPosition()
+      if (!pos) return
+
+      const dx = pos.x - lastPointerPos.x
+      const dy = pos.y - lastPointerPos.y
+
+      setStagePos({
+        x: stagePos.x + dx,
+        y: stagePos.y + dy
+      })
+
+      setLastPointerPos({ x: pos.x, y: pos.y })
+      return
+    }
+
     if (!isDrawing.current || !currentLine) return
 
     const point = getPointerPosition()
@@ -86,6 +114,7 @@ function App() {
 
   const handleEnd = () => {
     isDrawing.current = false
+    isPanning.current = false
     setCurrentLine(null)
   }
 
@@ -212,6 +241,9 @@ function App() {
             ))}
           </Layer>
         </Stage>
+      </div>
+      <div className="info">
+        <p>ヒント: 中クリックまたはShift+クリックで画面移動</p>
       </div>
     </div>
   )
