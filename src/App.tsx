@@ -341,8 +341,8 @@ function App() {
             <span>{penWidth}px</span>
           </div>
           <div className="tool-group">
-            <button onClick={handleZoomIn}>+</button>
             <button onClick={handleZoomOut}>-</button>
+            <button onClick={handleZoomIn}>+</button>
             <button onClick={handleResetZoom}>リセット</button>
           </div>
           <button onClick={() => setLines([])}>クリア</button>
