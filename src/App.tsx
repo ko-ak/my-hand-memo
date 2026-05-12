@@ -21,6 +21,8 @@ function App() {
   const [stageSize, setStageSize] = useState({ width: 800, height: 600 })
   const [touchMode, setTouchMode] = useState<'default' | 'draw'>('default')
   const canvasContainerRef = useRef<HTMLDivElement>(null)
+  const activePointersRef = useRef<Map<number, { x: number; y: number }>>(new Map())
+  const lastPinchDistRef = useRef(0)
 
   useEffect(() => {
     const now = new Date()
@@ -88,7 +90,28 @@ function App() {
   const handleStart = (e: Konva.KonvaEventObject<PointerEvent>) => {
     const evt = e.evt
 
+    if (evt.pointerType === 'touch' && evt.isPrimary) {
+      activePointersRef.current.clear()
+      lastPinchDistRef.current = 0
+    }
+
+    activePointersRef.current.set(evt.pointerId, { x: evt.clientX, y: evt.clientY })
+    const currentPointerCount = activePointersRef.current.size
+
+    if (currentPointerCount === 2) {
+      const pointers = Array.from(activePointersRef.current.values())
+      lastPinchDistRef.current = Math.hypot(pointers[0].x - pointers[1].x, pointers[0].y - pointers[1].y)
+      isDrawing.current = false
+      isPanning.current = false
+      setCurrentLine(null)
+    }
+
     if (evt.pointerType === 'touch' && touchMode === 'default') {
+      // 2本指の場合はピンチズームのみ
+      if (currentPointerCount >= 2) {
+        return
+      }
+      // 1本指の場合はパン
       isPanning.current = true
       const pos = getPointerPosition()
       if (pos) {
@@ -122,7 +145,50 @@ function App() {
     setLines([...lines, newLine])
   }
 
-  const handleMove = () => {
+  const handleMove = (e: Konva.KonvaEventObject<PointerEvent>) => {
+    const evt = e.evt
+
+    // アクティブなポインターを更新
+    activePointersRef.current.set(evt.pointerId, { x: evt.clientX, y: evt.clientY })
+
+    // 2本指のピンチズーム（タッチのみ）
+    if (evt.pointerType === 'touch' && activePointersRef.current.size === 2) {
+      const pointers = Array.from(activePointersRef.current.values())
+      if (pointers.length === 2) {
+        const dist = Math.hypot(pointers[0].x - pointers[1].x, pointers[0].y - pointers[1].y)
+        if (lastPinchDistRef.current > 0) {
+          const scaleBy = dist / lastPinchDistRef.current
+          const oldScale = scale
+          const newScale = oldScale * scaleBy
+
+          if (newScale >= 0.2 && newScale <= 5) {
+            const center = {
+              x: (pointers[0].x + pointers[1].x) / 2,
+              y: (pointers[0].y + pointers[1].y) / 2
+            }
+
+            const mousePointTo = {
+              x: (center.x - stagePos.x) / oldScale,
+              y: (center.y - stagePos.y) / oldScale
+            }
+
+            setScale(newScale)
+            setStagePos({
+              x: center.x - mousePointTo.x * newScale,
+              y: center.y - mousePointTo.y * newScale
+            })
+          }
+
+          lastPinchDistRef.current = dist
+        }
+        return
+      }
+    }
+
+    if (evt.pointerType === 'touch' && activePointersRef.current.size !== 2) {
+      lastPinchDistRef.current = 0
+    }
+
     if (isPanning.current) {
       const pos = getPointerPosition()
       if (!pos) return
@@ -157,7 +223,16 @@ function App() {
     })
   }
 
-  const handleEnd = () => {
+  const handleEnd = (e: Konva.KonvaEventObject<PointerEvent>) => {
+    const evt = e.evt
+
+    // アクティブなポインターを削除
+    activePointersRef.current.delete(evt.pointerId)
+
+    if (activePointersRef.current.size < 2) {
+      lastPinchDistRef.current = 0
+    }
+
     isDrawing.current = false
     isPanning.current = false
     setCurrentLine(null)
