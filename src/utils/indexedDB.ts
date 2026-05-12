@@ -9,6 +9,7 @@ export interface LineConfig {
   tension: number
   lineCap: string
   lineJoin: string
+  globalCompositeOperation?: string
 }
 
 export interface Memo {

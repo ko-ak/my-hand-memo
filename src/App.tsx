@@ -13,6 +13,7 @@ function App() {
   const stageRef = useRef<Konva.Stage>(null)
   const [penColor, setPenColor] = useState('#000000')
   const [penWidth, setPenWidth] = useState(2)
+  const [toolMode, setToolMode] = useState<'pen' | 'eraser'>('pen')
   const [currentLine, setCurrentLine] = useState<LineConfig | null>(null)
   const [memoTitle, setMemoTitle] = useState('')
   const [isEditingTitle, setIsEditingTitle] = useState(false)
@@ -27,6 +28,7 @@ function App() {
   const activePointersRef = useRef<Map<number, { x: number; y: number }>>(new Map())
   const lastPinchDistRef = useRef(0)
   const lastSavedSnapshotRef = useRef('')
+  const penSideButtonPointersRef = useRef<Set<number>>(new Set())
 
   const createDefaultTitle = () => {
     const now = new Date()
@@ -116,8 +118,32 @@ function App() {
     }
   }
 
+  const isPenSideButtonPressed = (evt: PointerEvent) => {
+    return evt.pointerType === 'pen' && (
+      evt.button === 2 ||
+      evt.button === 5 ||
+      (evt.buttons & 2) === 2 ||
+      (evt.buttons & 4) === 4 ||
+      (evt.buttons & 32) === 32
+    )
+  }
+
+  const isEraserInput = (evt: PointerEvent) => {
+    if (toolMode === 'eraser') return true
+    if (evt.pointerType !== 'pen') return false
+    return isPenSideButtonPressed(evt) || penSideButtonPointersRef.current.has(evt.pointerId)
+  }
+
   const handleStart = (e: Konva.KonvaEventObject<PointerEvent>) => {
     const evt = e.evt
+
+    if (evt.pointerType === 'pen') {
+      if (isPenSideButtonPressed(evt)) {
+        penSideButtonPointersRef.current.add(evt.pointerId)
+      } else {
+        penSideButtonPointersRef.current.delete(evt.pointerId)
+      }
+    }
 
     if (evt.pointerType === 'touch' && evt.isPrimary) {
       activePointersRef.current.clear()
@@ -162,13 +188,16 @@ function App() {
     const pos = getCanvasPointerPosition()
     if (!pos) return
 
+    const isEraser = isEraserInput(evt)
+
     const newLine: LineConfig = {
       points: [pos.x, pos.y],
-      stroke: penColor,
-      strokeWidth: penWidth,
+      stroke: isEraser ? '#000000' : penColor,
+      strokeWidth: isEraser ? Math.max(penWidth * 3, 12) : penWidth,
       tension: 0.5,
       lineCap: 'round' as any,
-      lineJoin: 'round' as any
+      lineJoin: 'round' as any,
+      globalCompositeOperation: isEraser ? 'destination-out' : 'source-over'
     }
     setCurrentLine(newLine)
     setLines([...lines, newLine])
@@ -179,6 +208,10 @@ function App() {
 
     // アクティブなポインターを更新
     activePointersRef.current.set(evt.pointerId, { x: evt.clientX, y: evt.clientY })
+
+    if (isPenSideButtonPressed(evt)) {
+      penSideButtonPointersRef.current.add(evt.pointerId)
+    }
 
     // 2本指のピンチズーム（タッチのみ）
     if (evt.pointerType === 'touch' && activePointersRef.current.size === 2) {
@@ -239,8 +272,13 @@ function App() {
     const point = getCanvasPointerPosition()
     if (!point) return
 
+    const isEraser = isEraserInput(evt)
+
     const updatedLine: LineConfig = {
       ...currentLine,
+      stroke: isEraser ? '#000000' : currentLine.stroke,
+      strokeWidth: isEraser ? Math.max(penWidth * 3, 12) : currentLine.strokeWidth,
+      globalCompositeOperation: isEraser ? 'destination-out' : currentLine.globalCompositeOperation,
       points: [...(currentLine.points || []), point.x, point.y]
     }
     setCurrentLine(updatedLine)
@@ -257,6 +295,7 @@ function App() {
 
     // アクティブなポインターを削除
     activePointersRef.current.delete(evt.pointerId)
+    penSideButtonPointersRef.current.delete(evt.pointerId)
 
     if (activePointersRef.current.size < 2) {
       lastPinchDistRef.current = 0
@@ -385,6 +424,10 @@ function App() {
             <input type="color" value={penColor} onChange={(e) => setPenColor(e.target.value)} />
           </div>
           <div className="tool-group">
+            <button className={toolMode === 'pen' ? 'active' : ''} onClick={() => setToolMode('pen')}>ペン</button>
+            <button className={toolMode === 'eraser' ? 'active' : ''} onClick={() => setToolMode('eraser')}>消しゴム</button>
+          </div>
+          <div className="tool-group">
             <label>太さ:</label>
             <input type="range" min="1" max="20" value={penWidth} onChange={(e) => setPenWidth(Number(e.target.value))} />
             <span>{penWidth}px</span>
@@ -453,7 +496,7 @@ function App() {
           >
             <Layer>
               {lines.map((line, i) => (
-                <Line key={i} points={line.points} stroke={line.stroke} strokeWidth={line.strokeWidth} tension={line.tension} lineCap={line.lineCap as any} lineJoin={line.lineJoin as any} />
+                <Line key={i} points={line.points} stroke={line.stroke} strokeWidth={line.strokeWidth} tension={line.tension} lineCap={line.lineCap as any} lineJoin={line.lineJoin as any} globalCompositeOperation={line.globalCompositeOperation as any} />
               ))}
             </Layer>
           </Stage>
