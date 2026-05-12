@@ -113,3 +113,54 @@ button.active {
   font-size: 0.9em;
 }
 
+.memo-list-container {
+  flex: 1;
+  overflow: auto;
+  padding: 20px;
+  background-color: #fff;
+}
+
+.memo-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.memo-list-header h3 {
+  margin: 0;
+}
+
+.memo-list {
+  display: grid;
+  gap: 12px;
+}
+
+.memo-list-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+  padding: 16px;
+  border: 1px solid #ddd;
+  background-color: #fafafa;
+  color: #333;
+  text-align: left;
+}
+
+.memo-list-title {
+  font-size: 1.1em;
+  font-weight: bold;
+}
+
+.memo-list-meta {
+  color: #666;
+  font-size: 0.9em;
+}
+
+.empty-message {
+  color: #666;
+  text-align: center;
+}
+

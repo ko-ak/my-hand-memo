@@ -6,6 +6,8 @@ import './App.css'
 
 function App() {
   const [lines, setLines] = useState<LineConfig[]>([])
+  const [memoList, setMemoList] = useState<Memo[]>([])
+  const [viewMode, setViewMode] = useState<'editor' | 'list'>('list')
   const isDrawing = useRef(false)
   const isPanning = useRef(false)
   const stageRef = useRef<Konva.Stage>(null)
@@ -15,6 +17,7 @@ function App() {
   const [memoTitle, setMemoTitle] = useState('')
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [memoId, setMemoId] = useState<string>('')
+  const [memoCreatedAt, setMemoCreatedAt] = useState<Date>(new Date())
   const [scale, setScale] = useState(1)
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 })
   const [lastPointerPos, setLastPointerPos] = useState({ x: 0, y: 0 })
@@ -23,12 +26,24 @@ function App() {
   const canvasContainerRef = useRef<HTMLDivElement>(null)
   const activePointersRef = useRef<Map<number, { x: number; y: number }>>(new Map())
   const lastPinchDistRef = useRef(0)
+  const lastSavedSnapshotRef = useRef('')
+
+  const createDefaultTitle = () => {
+    const now = new Date()
+    return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_`
+  }
+
+  const loadMemoList = async () => {
+    const memos = await indexedDBHelper.getAllMemos()
+    setMemoList([...memos].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()))
+  }
 
   useEffect(() => {
     const now = new Date()
-    const defaultTitle = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_`
-    setMemoTitle(defaultTitle)
-    setMemoId(Date.now().toString())
+    setMemoTitle(createDefaultTitle())
+    setMemoId(now.getTime().toString())
+    setMemoCreatedAt(now)
+    loadMemoList()
 
     // ウィンドウサイズに合わせてStageのサイズを設定
     const updateStageSize = () => {
@@ -53,22 +68,27 @@ function App() {
   }, [])
 
   useEffect(() => {
-    const autoSave = setInterval(async () => {
-      if (lines.length > 0) {
-        const memo: Memo = {
-          id: memoId,
-          title: memoTitle,
-          lines: lines,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        }
-        await indexedDBHelper.saveMemo(memo)
-        console.log('自動保存しました')
-      }
-    }, 5 * 60 * 1000) // 5分ごとに自動保存
+    if (!memoId || lines.length === 0) return
 
-    return () => clearInterval(autoSave)
-  }, [lines, memoTitle, memoId])
+    const snapshot = JSON.stringify({ memoId, memoTitle, lines })
+    if (snapshot === lastSavedSnapshotRef.current) return
+
+    const autoSave = setTimeout(async () => {
+      const memo: Memo = {
+        id: memoId,
+        title: memoTitle,
+        lines: lines,
+        createdAt: memoCreatedAt,
+        updatedAt: new Date()
+      }
+      await indexedDBHelper.saveMemo(memo)
+      lastSavedSnapshotRef.current = snapshot
+      await loadMemoList()
+      console.log('ローカルにリアルタイム保存しました')
+    }, 500)
+
+    return () => clearTimeout(autoSave)
+  }, [lines, memoTitle, memoId, memoCreatedAt])
 
   // 背景のドットを拡大縮小・移動と連動させる
   useEffect(() => {
@@ -264,11 +284,40 @@ function App() {
       id: memoId,
       title: memoTitle,
       lines: lines,
-      createdAt: new Date(),
+      createdAt: memoCreatedAt,
       updatedAt: new Date()
     }
     await indexedDBHelper.saveMemo(memo)
+    lastSavedSnapshotRef.current = JSON.stringify({ memoId, memoTitle, lines })
+    await loadMemoList()
     alert('保存しました')
+  }
+
+  const handleOpenMemo = (memo: Memo) => {
+    setMemoId(memo.id)
+    setMemoTitle(memo.title)
+    setMemoCreatedAt(new Date(memo.createdAt))
+    setLines(memo.lines)
+    setScale(1)
+    setStagePos({ x: 0, y: 0 })
+    setCurrentLine(null)
+    setViewMode('editor')
+  }
+
+  const handleNewMemo = () => {
+    const now = new Date()
+    setMemoId(now.getTime().toString())
+    setMemoTitle(createDefaultTitle())
+    setMemoCreatedAt(now)
+    setLines([])
+    setScale(1)
+    setStagePos({ x: 0, y: 0 })
+    setCurrentLine(null)
+    setViewMode('editor')
+  }
+
+  const formatDateTime = (value: Date) => {
+    return new Date(value).toLocaleString('ja-JP')
   }
 
   const handleWheel = (e: Konva.KonvaEventObject<WheelEvent>) => {
@@ -345,6 +394,9 @@ function App() {
             <button onClick={handleZoomIn}>+</button>
             <button onClick={handleResetZoom}>リセット</button>
           </div>
+          <button onClick={() => setViewMode(viewMode === 'editor' ? 'list' : 'editor')}>
+            {viewMode === 'editor' ? '一覧' : '編集'}
+          </button>
           <button onClick={() => setLines([])}>クリア</button>
           <button onClick={handleSave}>保存</button>
           <div className="tool-group">
@@ -363,28 +415,50 @@ function App() {
           </div>
         </div>
       </div>
-      <div className="canvas-container" ref={canvasContainerRef}>
-        <Stage
-          width={stageSize.width}
-          height={stageSize.height}
-          scaleX={scale}
-          scaleY={scale}
-          x={stagePos.x}
-          y={stagePos.y}
-          onPointerDown={handleStart}
-          onPointerMove={handleMove}
-          onPointerUp={handleEnd}
-          onPointerCancel={handleEnd}
-          onWheel={handleWheel}
-          ref={stageRef}
-        >
-          <Layer>
-            {lines.map((line, i) => (
-              <Line key={i} points={line.points} stroke={line.stroke} strokeWidth={line.strokeWidth} tension={line.tension} lineCap={line.lineCap as any} lineJoin={line.lineJoin as any} />
-            ))}
-          </Layer>
-        </Stage>
-      </div>
+      {viewMode === 'list' ? (
+        <div className="memo-list-container">
+          <div className="memo-list-header">
+            <h3>メモ一覧</h3>
+            <button onClick={handleNewMemo}>新規作成</button>
+          </div>
+          {memoList.length === 0 ? (
+            <p className="empty-message">保存されたメモはありません</p>
+          ) : (
+            <div className="memo-list">
+              {memoList.map((memo) => (
+                <button className="memo-list-item" key={memo.id} onClick={() => handleOpenMemo(memo)}>
+                  <span className="memo-list-title">{memo.title}</span>
+                  <span className="memo-list-meta">作成: {formatDateTime(memo.createdAt)}</span>
+                  <span className="memo-list-meta">更新: {formatDateTime(memo.updatedAt)}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="canvas-container" ref={canvasContainerRef}>
+          <Stage
+            width={stageSize.width}
+            height={stageSize.height}
+            scaleX={scale}
+            scaleY={scale}
+            x={stagePos.x}
+            y={stagePos.y}
+            onPointerDown={handleStart}
+            onPointerMove={handleMove}
+            onPointerUp={handleEnd}
+            onPointerCancel={handleEnd}
+            onWheel={handleWheel}
+            ref={stageRef}
+          >
+            <Layer>
+              {lines.map((line, i) => (
+                <Line key={i} points={line.points} stroke={line.stroke} strokeWidth={line.strokeWidth} tension={line.tension} lineCap={line.lineCap as any} lineJoin={line.lineJoin as any} />
+              ))}
+            </Layer>
+          </Stage>
+        </div>
+      )}
       <div className="info">
         <p>ヒント: 中クリックまたはShift+クリックで画面移動 | デフォルトモード: 指でパン、2本指でズーム | 描画モード: 指で描画、2本指でパン・ズーム</p>
       </div>
