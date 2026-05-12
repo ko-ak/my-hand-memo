@@ -87,6 +87,15 @@ function App() {
     return stage.getPointerPosition()
   }
 
+  const getCanvasPointerPosition = () => {
+    const pos = getPointerPosition()
+    if (!pos) return null
+    return {
+      x: (pos.x - stagePos.x) / scale,
+      y: (pos.y - stagePos.y) / scale
+    }
+  }
+
   const handleStart = (e: Konva.KonvaEventObject<PointerEvent>) => {
     const evt = e.evt
 
@@ -130,7 +139,7 @@ function App() {
     }
 
     isDrawing.current = true
-    const pos = getPointerPosition()
+    const pos = getCanvasPointerPosition()
     if (!pos) return
 
     const newLine: LineConfig = {
@@ -207,7 +216,7 @@ function App() {
 
     if (!isDrawing.current || !currentLine) return
 
-    const point = getPointerPosition()
+    const point = getCanvasPointerPosition()
     if (!point) return
 
     const updatedLine: LineConfig = {
