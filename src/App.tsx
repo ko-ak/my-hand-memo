@@ -274,6 +274,15 @@ function AppContent() {
             }
           }
         }
+
+        // ローカルからドライブへのアップロード
+        const finalMemos = await indexedDBHelper.getAllMemos()
+        for (const memo of finalMemos) {
+          const googleDriveFile = googleDriveFiles.find(file => file.id === memo.googleDriveFileId)
+          if (shouldUploadMemo(memo, googleDriveFile)) {
+            await syncMemoToGoogleDrive(memo, googleDriveFolderId)
+          }
+        }
       } catch (error) {
         console.error('Google Drive同期エラー:', error)
       }
