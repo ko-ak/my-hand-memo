@@ -190,6 +190,7 @@ function AppContent() {
     const memoData = JSON.stringify(memoToSync)
 
     if (memo.googleDriveFileId) {
+      await googleDriveHelper.renameFile(memo.googleDriveFileId, `${memo.title}.json`)
       const file = await googleDriveHelper.updateFile(memo.googleDriveFileId, memoData)
       const syncedMemo = {
         ...memoToSync,
@@ -253,6 +254,12 @@ function AppContent() {
             ...JSON.parse(fileData),
             googleDriveFileId: file.id,
             googleDriveSyncedAt: new Date()
+          }
+
+          // Google Driveのファイル名からタイトルを抽出して更新
+          const fileNameWithoutExt = file.name.replace('.json', '')
+          if (googleDriveMemo.title !== fileNameWithoutExt) {
+            googleDriveMemo.title = fileNameWithoutExt
           }
 
           await indexedDBHelper.saveMemo(googleDriveMemo)
@@ -424,6 +431,12 @@ function AppContent() {
             ...JSON.parse(fileData),
             googleDriveFileId: file.id,
             googleDriveSyncedAt: new Date()
+          }
+
+          // Google Driveのファイル名からタイトルを抽出して更新
+          const fileNameWithoutExt = file.name.replace('.json', '')
+          if (googleDriveMemo.title !== fileNameWithoutExt) {
+            googleDriveMemo.title = fileNameWithoutExt
           }
 
           await indexedDBHelper.saveMemo(googleDriveMemo)
@@ -680,13 +693,26 @@ function AppContent() {
     const memos = await indexedDBHelper.getAllMemos()
     const existingMemo = memos.find(m => m.title === memoTitle && m.id !== memoId)
     
+    let finalTitle = memoTitle
     if (existingMemo && memoTitle.trim() !== '') {
       // 連番を付与
       let counter = 1
       while (memos.find(m => m.title === `${memoTitle}(${counter})` && m.id !== memoId)) {
         counter++
       }
-      setMemoTitle(`${memoTitle}(${counter})`)
+      finalTitle = `${memoTitle}(${counter})`
+      setMemoTitle(finalTitle)
+    }
+
+    // Google Drive連携済みの場合、ファイル名も変更
+    const currentMemo = memos.find(m => m.id === memoId)
+    if (currentMemo?.googleDriveFileId && googleDriveStatus === 'connected') {
+      try {
+        await googleDriveHelper.renameFile(currentMemo.googleDriveFileId, `${finalTitle}.json`)
+        console.log('Google Driveのファイル名を変更しました')
+      } catch (error) {
+        console.error('Google Driveファイル名変更エラー:', error)
+      }
     }
   }
 

@@ -137,7 +137,7 @@ export class GoogleDriveHelper {
       throw new Error('Not signed in')
     }
 
-    const query = encodeURIComponent(`'${folderId}' in parents and mimeType = 'application/json'`)
+    const query = encodeURIComponent(`'${folderId}' in parents and mimeType = 'application/json' and trashed = false`)
     const response = await this.request<{ files?: GoogleDriveFile[] }>(`https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name,modifiedTime,webViewLink)`)
     return response.files || []
   }
@@ -149,6 +149,22 @@ export class GoogleDriveHelper {
 
     await this.request<void>(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
       method: 'DELETE'
+    })
+  }
+
+  async renameFile(fileId: string, newName: string): Promise<GoogleDriveFile> {
+    if (!this.accessToken) {
+      throw new Error('Not signed in')
+    }
+
+    return this.request<GoogleDriveFile>(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=id,name,modifiedTime,webViewLink`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        name: newName
+      })
     })
   }
 }
