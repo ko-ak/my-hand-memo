@@ -3,14 +3,44 @@ import { Stage, Layer, Line } from 'react-konva'
 import Konva from 'konva'
 import { indexedDBHelper, Memo, LineConfig } from './utils/indexedDB'
 import { googleDriveHelper } from './utils/googleDrive'
+import { GoogleOAuthProvider, useGoogleLogin, googleLogout } from '@react-oauth/google'
 import './App.css'
 
-function App() {
+const CLIENT_ID = '205887830808-k14l2jn5u56fvrvf7hbet84gf4hj5k2e.apps.googleusercontent.com'
+
+function AppContent() {
   const [lines, setLines] = useState<LineConfig[]>([])
   const [memoList, setMemoList] = useState<Memo[]>([])
   const [viewMode, setViewMode] = useState<'editor' | 'list'>('list')
   const [googleDriveStatus, setGoogleDriveStatus] = useState<'not-connected' | 'connecting' | 'connected'>('not-connected')
   const [googleDriveFolderId, setGoogleDriveFolderId] = useState<string | null>(null)
+
+  const googleLogin = useGoogleLogin({
+    onSuccess: async (tokenResponse) => {
+      googleDriveHelper.setAccessToken(tokenResponse.access_token)
+      
+      try {
+        // Google Driveフォルダを作成
+        const folder = await googleDriveHelper.createFolder('手書きメモ')
+        setGoogleDriveFolderId(folder.id)
+        
+        // ローカルストレージに保存
+        localStorage.setItem('googleDriveFolderId', folder.id)
+        
+        setGoogleDriveStatus('connected')
+      } catch (error) {
+        console.error('Google Driveフォルダ作成エラー:', error)
+        alert('Google Driveフォルダの作成に失敗しました')
+        setGoogleDriveStatus('not-connected')
+      }
+    },
+    onError: (error) => {
+      console.error('Google Login Error:', error)
+      alert('Google認証に失敗しました')
+      setGoogleDriveStatus('not-connected')
+    },
+    scope: 'https://www.googleapis.com/auth/drive.file'
+  })
   const isDrawing = useRef(false)
   const isPanning = useRef(false)
   const stageRef = useRef<Konva.Stage>(null)
@@ -82,16 +112,7 @@ function App() {
     setGoogleDriveStatus('connecting')
     try {
       await googleDriveHelper.initialize()
-      await googleDriveHelper.signIn()
-      
-      // Google Driveフォルダを作成
-      const folder = await googleDriveHelper.createFolder('手書きメモ')
-      setGoogleDriveFolderId(folder.id)
-      
-      // ローカルストレージに保存
-      localStorage.setItem('googleDriveFolderId', folder.id)
-      
-      setGoogleDriveStatus('connected')
+      googleLogin()
     } catch (error) {
       console.error('Google Drive連携エラー:', error)
       alert('Google Drive連携に失敗しました')
@@ -101,7 +122,8 @@ function App() {
 
   const handleGoogleDriveDisconnect = async () => {
     try {
-      await googleDriveHelper.signOut()
+      googleLogout()
+      googleDriveHelper.clearAccessToken()
       setGoogleDriveFolderId(null)
       localStorage.removeItem('googleDriveFolderId')
       setGoogleDriveStatus('not-connected')
@@ -122,17 +144,8 @@ function App() {
     const savedFolderId = localStorage.getItem('googleDriveFolderId')
     if (savedFolderId) {
       setGoogleDriveFolderId(savedFolderId)
-      setGoogleDriveStatus('connected')
       // Google Drive Helperを初期化
-      googleDriveHelper.initialize().then(() => {
-        if (googleDriveHelper.isAuthorized()) {
-          setGoogleDriveStatus('connected')
-        } else {
-          setGoogleDriveStatus('not-connected')
-          setGoogleDriveFolderId(null)
-          localStorage.removeItem('googleDriveFolderId')
-        }
-      }).catch(() => {
+      googleDriveHelper.initialize().catch(() => {
         setGoogleDriveStatus('not-connected')
         setGoogleDriveFolderId(null)
         localStorage.removeItem('googleDriveFolderId')
@@ -681,4 +694,10 @@ function App() {
   )
 }
 
-export default App
+export default function App() {
+  return (
+    <GoogleOAuthProvider clientId={CLIENT_ID}>
+      <AppContent />
+    </GoogleOAuthProvider>
+  )
+}

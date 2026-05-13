@@ -1,8 +1,3 @@
-import { gapi } from 'gapi-script'
-
-const CLIENT_ID = '205887830808-k14l2jn5u56fvrvf7hbet84gf4hj5k2e.apps.googleusercontent.com'
-const SCOPES = 'https://www.googleapis.com/auth/drive.file'
-
 export interface GoogleDriveFile {
   id: string
   name: string
@@ -12,167 +7,137 @@ export interface GoogleDriveFile {
 
 export class GoogleDriveHelper {
   private isInitialized = false
-  private isSignedIn = false
+  private accessToken: string | null = null
 
   async initialize(): Promise<void> {
     if (this.isInitialized) return
+    this.isInitialized = true
+  }
 
-    return new Promise((resolve, reject) => {
-      gapi.load('client:auth2', async () => {
-        try {
-          await gapi.client.init({
-            clientId: CLIENT_ID,
-            scope: SCOPES,
-            discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest']
-          })
-          this.isInitialized = true
+  setAccessToken(token: string): void {
+    this.accessToken = token
+  }
 
-          // 認証状態をチェック
-          this.isSignedIn = gapi.auth2.getAuthInstance().isSignedIn.get()
-          
-          // 認証状態の変化を監視
-          gapi.auth2.getAuthInstance().isSignedIn.listen((signedIn: boolean) => {
-            this.isSignedIn = signedIn
-          })
+  clearAccessToken(): void {
+    this.accessToken = null
+  }
 
-          resolve()
-        } catch (error) {
-          reject(error)
-        }
+  isAuthorized(): boolean {
+    return this.accessToken !== null
+  }
+
+  private async request<T>(url: string, options: RequestInit = {}): Promise<T> {
+    if (!this.accessToken) {
+      throw new Error('Not signed in')
+    }
+
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        Authorization: `Bearer ${this.accessToken}`,
+        ...(options.headers || {})
+      }
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`Google Drive APIエラー: ${response.status} ${errorText}`)
+    }
+
+    if (response.status === 204) {
+      return undefined as T
+    }
+
+    return response.json()
+  }
+
+  async createFolder(folderName: string): Promise<GoogleDriveFile> {
+    if (!this.accessToken) {
+      throw new Error('Not signed in')
+    }
+
+    return this.request<GoogleDriveFile>('https://www.googleapis.com/drive/v3/files?fields=id,name,modifiedTime,webViewLink', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        name: folderName,
+        mimeType: 'application/vnd.google-apps.folder'
       })
     })
   }
 
-  async signIn(): Promise<void> {
-    if (!this.isInitialized) {
-      await this.initialize()
-    }
-
-    const authInstance = gapi.auth2.getAuthInstance()
-    if (!authInstance.isSignedIn.get()) {
-      await authInstance.signIn()
-    }
-    this.isSignedIn = true
-  }
-
-  async signOut(): Promise<void> {
-    if (!this.isInitialized) return
-
-    const authInstance = gapi.auth2.getAuthInstance()
-    if (authInstance.isSignedIn.get()) {
-      await authInstance.signOut()
-    }
-    this.isSignedIn = false
-  }
-
-  isAuthorized(): boolean {
-    return this.isSignedIn
-  }
-
-  async createFolder(folderName: string): Promise<GoogleDriveFile> {
-    if (!this.isSignedIn) {
-      throw new Error('Not signed in')
-    }
-
-    const response = await gapi.client.drive.files.create({
-      resource: {
-        name: folderName,
-        mimeType: 'application/vnd.google-apps.folder'
-      }
-    })
-
-    return {
-      id: response.result.id!,
-      name: response.result.name!,
-      modifiedTime: response.result.modifiedTime!,
-      webViewLink: response.result.webViewLink!
-    }
-  }
-
   async saveFile(folderId: string, fileName: string, content: string): Promise<GoogleDriveFile> {
-    if (!this.isSignedIn) {
+    if (!this.accessToken) {
       throw new Error('Not signed in')
     }
 
-    const response = await gapi.client.drive.files.create({
-      resource: {
-        name: fileName,
-        parents: [folderId],
-        mimeType: 'application/json'
-      },
-      media: {
-        mimeType: 'application/json',
-        body: content
-      }
-    })
-
-    return {
-      id: response.result.id!,
-      name: response.result.name!,
-      modifiedTime: response.result.modifiedTime!,
-      webViewLink: response.result.webViewLink!
+    const metadata = {
+      name: fileName,
+      parents: [folderId],
+      mimeType: 'application/json'
     }
+    const body = new FormData()
+    body.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }))
+    body.append('file', new Blob([content], { type: 'application/json' }))
+
+    return this.request<GoogleDriveFile>('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,modifiedTime,webViewLink', {
+      method: 'POST',
+      body
+    })
   }
 
   async updateFile(fileId: string, content: string): Promise<GoogleDriveFile> {
-    if (!this.isSignedIn) {
+    if (!this.accessToken) {
       throw new Error('Not signed in')
     }
 
-    const response = await gapi.client.drive.files.update({
-      fileId: fileId,
-      media: {
-        mimeType: 'application/json',
-        body: content
-      }
+    return this.request<GoogleDriveFile>(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media&fields=id,name,modifiedTime,webViewLink`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: content
     })
-
-    return {
-      id: response.result.id!,
-      name: response.result.name!,
-      modifiedTime: response.result.modifiedTime!,
-      webViewLink: response.result.webViewLink!
-    }
   }
 
   async getFile(fileId: string): Promise<string> {
-    if (!this.isSignedIn) {
+    if (!this.accessToken) {
       throw new Error('Not signed in')
     }
 
-    const response = await gapi.client.drive.files.get({
-      fileId: fileId,
-      alt: 'media'
+    const response = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+      headers: {
+        Authorization: `Bearer ${this.accessToken}`
+      }
     })
 
-    return response.body
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`Google Drive APIエラー: ${response.status} ${errorText}`)
+    }
+
+    return response.text()
   }
 
   async listFiles(folderId: string): Promise<GoogleDriveFile[]> {
-    if (!this.isSignedIn) {
+    if (!this.accessToken) {
       throw new Error('Not signed in')
     }
 
-    const response = await gapi.client.drive.files.list({
-      q: `'${folderId}' in parents and mimeType = 'application/json'`,
-      fields: 'files(id, name, modifiedTime, webViewLink)'
-    })
-
-    return response.result.files?.map((file: any) => ({
-      id: file.id!,
-      name: file.name!,
-      modifiedTime: file.modifiedTime!,
-      webViewLink: file.webViewLink!
-    })) || []
+    const query = encodeURIComponent(`'${folderId}' in parents and mimeType = 'application/json'`)
+    const response = await this.request<{ files?: GoogleDriveFile[] }>(`https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name,modifiedTime,webViewLink)`)
+    return response.files || []
   }
 
   async deleteFile(fileId: string): Promise<void> {
-    if (!this.isSignedIn) {
+    if (!this.accessToken) {
       throw new Error('Not signed in')
     }
 
-    await gapi.client.drive.files.delete({
-      fileId: fileId
+    await this.request<void>(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
+      method: 'DELETE'
     })
   }
 }
