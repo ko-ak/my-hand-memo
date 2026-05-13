@@ -18,6 +18,7 @@ export interface Memo {
   lines: LineConfig[]
   createdAt: Date
   updatedAt: Date
+  googleDriveFileId?: string
 }
 
 export const indexedDBHelper = {

@@ -2,12 +2,15 @@ import { useRef, useEffect, useState } from 'react'
 import { Stage, Layer, Line } from 'react-konva'
 import Konva from 'konva'
 import { indexedDBHelper, Memo, LineConfig } from './utils/indexedDB'
+import { googleDriveHelper } from './utils/googleDrive'
 import './App.css'
 
 function App() {
   const [lines, setLines] = useState<LineConfig[]>([])
   const [memoList, setMemoList] = useState<Memo[]>([])
   const [viewMode, setViewMode] = useState<'editor' | 'list'>('list')
+  const [googleDriveStatus, setGoogleDriveStatus] = useState<'not-connected' | 'connecting' | 'connected'>('not-connected')
+  const [googleDriveFolderId, setGoogleDriveFolderId] = useState<string | null>(null)
   const isDrawing = useRef(false)
   const isPanning = useRef(false)
   const stageRef = useRef<Konva.Stage>(null)
@@ -37,7 +40,75 @@ function App() {
 
   const loadMemoList = async () => {
     const memos = await indexedDBHelper.getAllMemos()
+    
+    // Google Driveからもメモを取得（連携済みの場合）
+    if (googleDriveStatus === 'connected' && googleDriveFolderId) {
+      try {
+        const googleDriveFiles = await googleDriveHelper.listFiles(googleDriveFolderId)
+        
+        // Google Driveのファイルをローカルに同期
+        for (const file of googleDriveFiles) {
+          const localMemo = memos.find(m => m.googleDriveFileId === file.id)
+          const fileData = await googleDriveHelper.getFile(file.id)
+          const googleDriveMemo: Memo = JSON.parse(fileData)
+
+          if (!localMemo) {
+            // ローカルにないメモは追加
+            await indexedDBHelper.saveMemo(googleDriveMemo)
+            memos.push(googleDriveMemo)
+          } else {
+            // 更新日時を比較して最新のメモを採用
+            const localUpdatedAt = new Date(localMemo.updatedAt).getTime()
+            const googleDriveUpdatedAt = new Date(googleDriveMemo.updatedAt).getTime()
+
+            if (googleDriveUpdatedAt > localUpdatedAt) {
+              await indexedDBHelper.saveMemo(googleDriveMemo)
+              const index = memos.findIndex(m => m.id === localMemo.id)
+              if (index !== -1) {
+                memos[index] = googleDriveMemo
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Google Drive同期エラー:', error)
+      }
+    }
+    
     setMemoList([...memos].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()))
+  }
+
+  const handleGoogleDriveConnect = async () => {
+    setGoogleDriveStatus('connecting')
+    try {
+      await googleDriveHelper.initialize()
+      await googleDriveHelper.signIn()
+      
+      // Google Driveフォルダを作成
+      const folder = await googleDriveHelper.createFolder('手書きメモ')
+      setGoogleDriveFolderId(folder.id)
+      
+      // ローカルストレージに保存
+      localStorage.setItem('googleDriveFolderId', folder.id)
+      
+      setGoogleDriveStatus('connected')
+    } catch (error) {
+      console.error('Google Drive連携エラー:', error)
+      alert('Google Drive連携に失敗しました')
+      setGoogleDriveStatus('not-connected')
+    }
+  }
+
+  const handleGoogleDriveDisconnect = async () => {
+    try {
+      await googleDriveHelper.signOut()
+      setGoogleDriveFolderId(null)
+      localStorage.removeItem('googleDriveFolderId')
+      setGoogleDriveStatus('not-connected')
+    } catch (error) {
+      console.error('Google Drive切断エラー:', error)
+      alert('Google Driveの切断に失敗しました')
+    }
   }
 
   useEffect(() => {
@@ -46,6 +117,27 @@ function App() {
     setMemoId(now.getTime().toString())
     setMemoCreatedAt(now)
     loadMemoList()
+
+    // Google Drive連携状態を復元
+    const savedFolderId = localStorage.getItem('googleDriveFolderId')
+    if (savedFolderId) {
+      setGoogleDriveFolderId(savedFolderId)
+      setGoogleDriveStatus('connected')
+      // Google Drive Helperを初期化
+      googleDriveHelper.initialize().then(() => {
+        if (googleDriveHelper.isAuthorized()) {
+          setGoogleDriveStatus('connected')
+        } else {
+          setGoogleDriveStatus('not-connected')
+          setGoogleDriveFolderId(null)
+          localStorage.removeItem('googleDriveFolderId')
+        }
+      }).catch(() => {
+        setGoogleDriveStatus('not-connected')
+        setGoogleDriveFolderId(null)
+        localStorage.removeItem('googleDriveFolderId')
+      })
+    }
 
     // ウィンドウサイズに合わせてStageのサイズを設定
     const updateStageSize = () => {
@@ -91,6 +183,45 @@ function App() {
 
     return () => clearTimeout(autoSave)
   }, [lines, memoTitle, memoId, memoCreatedAt])
+
+  // 定期同期（5分おき）
+  useEffect(() => {
+    if (googleDriveStatus !== 'connected' || !googleDriveFolderId) return
+
+    const syncInterval = setInterval(async () => {
+      try {
+        const memos = await indexedDBHelper.getAllMemos()
+        const googleDriveFiles = await googleDriveHelper.listFiles(googleDriveFolderId)
+
+        // Google Driveのファイルをローカルに同期
+        for (const file of googleDriveFiles) {
+          const localMemo = memos.find(m => m.googleDriveFileId === file.id)
+          const fileData = await googleDriveHelper.getFile(file.id)
+          const googleDriveMemo: Memo = JSON.parse(fileData)
+
+          if (!localMemo) {
+            // ローカルにないメモは追加
+            await indexedDBHelper.saveMemo(googleDriveMemo)
+          } else {
+            // 更新日時を比較して最新のメモを採用
+            const localUpdatedAt = new Date(localMemo.updatedAt).getTime()
+            const googleDriveUpdatedAt = new Date(googleDriveMemo.updatedAt).getTime()
+
+            if (googleDriveUpdatedAt > localUpdatedAt) {
+              await indexedDBHelper.saveMemo(googleDriveMemo)
+            }
+          }
+        }
+
+        await loadMemoList()
+        console.log('定期同期が完了しました')
+      } catch (error) {
+        console.error('定期同期エラー:', error)
+      }
+    }, 5 * 60 * 1000) // 5分おき
+
+    return () => clearInterval(syncInterval)
+  }, [googleDriveStatus, googleDriveFolderId])
 
   // 背景のドットを拡大縮小・移動と連動させる
   useEffect(() => {
@@ -324,12 +455,44 @@ function App() {
       title: memoTitle,
       lines: lines,
       createdAt: memoCreatedAt,
-      updatedAt: new Date()
+      updatedAt: new Date(),
+      googleDriveFileId: undefined // まだGoogle Driveに保存していない
     }
+    
+    // ローカルに保存
     await indexedDBHelper.saveMemo(memo)
     lastSavedSnapshotRef.current = JSON.stringify({ memoId, memoTitle, lines })
     await loadMemoList()
-    alert('保存しました')
+    
+    // Google Driveに保存（連携済みの場合）
+    if (googleDriveStatus === 'connected' && googleDriveFolderId) {
+      try {
+        const memoData = JSON.stringify(memo)
+        let googleDriveFileId: string
+        
+        if (memo.googleDriveFileId) {
+          // 既存のファイルを更新
+          await googleDriveHelper.updateFile(memo.googleDriveFileId, memoData)
+          googleDriveFileId = memo.googleDriveFileId
+        } else {
+          // 新規ファイルを作成
+          const file = await googleDriveHelper.saveFile(googleDriveFolderId, `${memoTitle}.json`, memoData)
+          googleDriveFileId = file.id
+          
+          // Google DriveファイルIDを保存
+          memo.googleDriveFileId = googleDriveFileId
+          await indexedDBHelper.saveMemo(memo)
+          await loadMemoList()
+        }
+        
+        alert('保存しました（Google Driveにも保存されました）')
+      } catch (error) {
+        console.error('Google Drive保存エラー:', error)
+        alert('ローカルに保存しましたが、Google Driveへの保存に失敗しました')
+      }
+    } else {
+      alert('保存しました')
+    }
   }
 
   const handleOpenMemo = (memo: Memo) => {
@@ -462,7 +625,16 @@ function App() {
         <div className="memo-list-container">
           <div className="memo-list-header">
             <h3>メモ一覧</h3>
-            <button onClick={handleNewMemo}>新規作成</button>
+            <div className="memo-list-actions">
+              {googleDriveStatus === 'connected' ? (
+                <button onClick={handleGoogleDriveDisconnect}>Google Driveを切断</button>
+              ) : (
+                <button onClick={handleGoogleDriveConnect} disabled={googleDriveStatus === 'connecting'}>
+                  {googleDriveStatus === 'connecting' ? '連携中...' : 'Google Driveに保存する'}
+                </button>
+              )}
+              <button onClick={handleNewMemo}>新規作成</button>
+            </div>
           </div>
           {memoList.length === 0 ? (
             <p className="empty-message">保存されたメモはありません</p>

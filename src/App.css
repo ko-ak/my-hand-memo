@@ -131,6 +131,11 @@ button.active {
   margin: 0;
 }
 
+.memo-list-actions {
+  display: flex;
+  gap: 10px;
+}
+
 .memo-list {
   display: grid;
   gap: 12px;
