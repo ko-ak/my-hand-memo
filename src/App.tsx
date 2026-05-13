@@ -6,6 +6,83 @@ import { googleDriveHelper } from './utils/googleDrive'
 import { GoogleOAuthProvider, useGoogleLogin, googleLogout } from '@react-oauth/google'
 import './App.css'
 
+const MemoThumbnail = ({ lines }: { lines: LineConfig[] }) => {
+  const thumbnailSize = 128
+
+  // メモの範囲を計算して、サムネイルに合わせてスケールを調整
+  const calculateBounds = () => {
+    if (lines.length === 0) return { minX: 0, minY: 0, maxX: thumbnailSize, maxY: thumbnailSize }
+
+    let minX = Infinity
+    let minY = Infinity
+    let maxX = -Infinity
+    let maxY = -Infinity
+
+    lines.forEach(line => {
+      if (line.points && line.points.length >= 2) {
+        for (let i = 0; i < line.points.length; i += 2) {
+          const x = line.points[i]
+          const y = line.points[i + 1]
+          minX = Math.min(minX, x)
+          minY = Math.min(minY, y)
+          maxX = Math.max(maxX, x)
+          maxY = Math.max(maxY, y)
+        }
+      }
+    })
+
+    if (minX === Infinity) {
+      return { minX: 0, minY: 0, maxX: thumbnailSize, maxY: thumbnailSize }
+    }
+
+    const padding = 20
+    const contentWidth = maxX - minX + padding * 2
+    const contentHeight = maxY - minY + padding * 2
+    const scaleX = thumbnailSize / contentWidth
+    const scaleY = thumbnailSize / contentHeight
+    const scale = Math.min(scaleX, scaleY)
+
+    return {
+      minX: minX - padding,
+      minY: minY - padding,
+      maxX: maxX + padding,
+      maxY: maxY + padding,
+      scale
+    }
+  }
+
+  const bounds = calculateBounds()
+  const scale = bounds.scale || 1
+
+  return (
+    <div className="memo-thumbnail">
+      <Stage
+        width={thumbnailSize}
+        height={thumbnailSize}
+        scaleX={scale}
+        scaleY={scale}
+        x={-bounds.minX * scale}
+        y={-bounds.minY * scale}
+      >
+        <Layer>
+          {lines.map((line, i) => (
+            <Line
+              key={i}
+              points={line.points}
+              stroke={line.stroke}
+              strokeWidth={line.strokeWidth}
+              tension={line.tension}
+              lineCap={line.lineCap as any}
+              lineJoin={line.lineJoin as any}
+              globalCompositeOperation={line.globalCompositeOperation as any}
+            />
+          ))}
+        </Layer>
+      </Stage>
+    </div>
+  )
+}
+
 const CLIENT_ID = '205887830808-k14l2jn5u56fvrvf7hbet84gf4hj5k2e.apps.googleusercontent.com'
 
 function AppContent() {
@@ -14,6 +91,8 @@ function AppContent() {
   const [viewMode, setViewMode] = useState<'editor' | 'list'>('list')
   const [googleDriveStatus, setGoogleDriveStatus] = useState<'not-connected' | 'connecting' | 'connected'>('not-connected')
   const [googleDriveFolderId, setGoogleDriveFolderId] = useState<string | null>(null)
+  const [isSaveHelpOpen, setIsSaveHelpOpen] = useState(false)
+  const [deleteTargetMemo, setDeleteTargetMemo] = useState<Memo | null>(null)
 
   const googleLogin = useGoogleLogin({
     onSuccess: async (tokenResponse) => {
@@ -68,6 +147,54 @@ function AppContent() {
     return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_`
   }
 
+  const syncMemoToGoogleDrive = async (memo: Memo, folderId: string): Promise<Memo> => {
+    const memoToSync = {
+      ...memo
+    }
+    const memoData = JSON.stringify(memoToSync)
+
+    if (memo.googleDriveFileId) {
+      const file = await googleDriveHelper.updateFile(memo.googleDriveFileId, memoData)
+      const syncedMemo = {
+        ...memoToSync,
+        googleDriveSyncedAt: new Date(file.modifiedTime)
+      }
+      await indexedDBHelper.saveMemo(syncedMemo)
+      return syncedMemo
+    }
+
+    const file = await googleDriveHelper.saveFile(folderId, `${memo.title}.json`, memoData)
+    const syncedMemo = {
+      ...memoToSync,
+      googleDriveFileId: file.id,
+      googleDriveSyncedAt: new Date(file.modifiedTime)
+    }
+    await indexedDBHelper.saveMemo(syncedMemo)
+    return syncedMemo
+  }
+
+  const shouldUploadMemo = (memo: Memo, googleDriveFile?: { modifiedTime: string }) => {
+    if (!googleDriveFile) return true
+    if (!memo.googleDriveSyncedAt) return true
+
+    const localUpdatedAt = new Date(memo.updatedAt).getTime()
+    const lastSyncedAt = new Date(memo.googleDriveSyncedAt).getTime()
+    const googleDriveModifiedAt = new Date(googleDriveFile.modifiedTime).getTime()
+
+    return localUpdatedAt > lastSyncedAt && localUpdatedAt > googleDriveModifiedAt
+  }
+
+  const shouldDownloadMemo = (memo: Memo | undefined, googleDriveFile: { modifiedTime: string }) => {
+    if (!memo) return true
+    if (!memo.googleDriveSyncedAt) return true
+
+    const localUpdatedAt = new Date(memo.updatedAt).getTime()
+    const lastSyncedAt = new Date(memo.googleDriveSyncedAt).getTime()
+    const googleDriveModifiedAt = new Date(googleDriveFile.modifiedTime).getTime()
+
+    return googleDriveModifiedAt > lastSyncedAt && googleDriveModifiedAt > localUpdatedAt
+  }
+
   const loadMemoList = async () => {
     const memos = await indexedDBHelper.getAllMemos()
     
@@ -79,25 +206,24 @@ function AppContent() {
         // Google Driveのファイルをローカルに同期
         for (const file of googleDriveFiles) {
           const localMemo = memos.find(m => m.googleDriveFileId === file.id)
-          const fileData = await googleDriveHelper.getFile(file.id)
-          const googleDriveMemo: Memo = JSON.parse(fileData)
 
-          if (!localMemo) {
-            // ローカルにないメモは追加
-            await indexedDBHelper.saveMemo(googleDriveMemo)
+          if (!shouldDownloadMemo(localMemo, file)) {
+            continue
+          }
+
+          const fileData = await googleDriveHelper.getFile(file.id)
+          const googleDriveMemo: Memo = {
+            ...JSON.parse(fileData),
+            googleDriveFileId: file.id,
+            googleDriveSyncedAt: new Date()
+          }
+
+          await indexedDBHelper.saveMemo(googleDriveMemo)
+          const index = memos.findIndex(m => m.id === googleDriveMemo.id)
+          if (index === -1) {
             memos.push(googleDriveMemo)
           } else {
-            // 更新日時を比較して最新のメモを採用
-            const localUpdatedAt = new Date(localMemo.updatedAt).getTime()
-            const googleDriveUpdatedAt = new Date(googleDriveMemo.updatedAt).getTime()
-
-            if (googleDriveUpdatedAt > localUpdatedAt) {
-              await indexedDBHelper.saveMemo(googleDriveMemo)
-              const index = memos.findIndex(m => m.id === localMemo.id)
-              if (index !== -1) {
-                memos[index] = googleDriveMemo
-              }
-            }
+            memos[index] = googleDriveMemo
           }
         }
       } catch (error) {
@@ -181,12 +307,14 @@ function AppContent() {
     if (snapshot === lastSavedSnapshotRef.current) return
 
     const autoSave = setTimeout(async () => {
+      const existingMemo = (await indexedDBHelper.getAllMemos()).find(memo => memo.id === memoId)
       const memo: Memo = {
         id: memoId,
         title: memoTitle,
         lines: lines,
         createdAt: memoCreatedAt,
-        updatedAt: new Date()
+        updatedAt: new Date(),
+        googleDriveFileId: existingMemo?.googleDriveFileId
       }
       await indexedDBHelper.saveMemo(memo)
       lastSavedSnapshotRef.current = snapshot
@@ -209,25 +337,31 @@ function AppContent() {
         // Google Driveのファイルをローカルに同期
         for (const file of googleDriveFiles) {
           const localMemo = memos.find(m => m.googleDriveFileId === file.id)
+
+          if (!shouldDownloadMemo(localMemo, file)) {
+            continue
+          }
+
           const fileData = await googleDriveHelper.getFile(file.id)
-          const googleDriveMemo: Memo = JSON.parse(fileData)
+          const googleDriveMemo: Memo = {
+            ...JSON.parse(fileData),
+            googleDriveFileId: file.id,
+            googleDriveSyncedAt: new Date()
+          }
 
-          if (!localMemo) {
-            // ローカルにないメモは追加
-            await indexedDBHelper.saveMemo(googleDriveMemo)
-          } else {
-            // 更新日時を比較して最新のメモを採用
-            const localUpdatedAt = new Date(localMemo.updatedAt).getTime()
-            const googleDriveUpdatedAt = new Date(googleDriveMemo.updatedAt).getTime()
+          await indexedDBHelper.saveMemo(googleDriveMemo)
+        }
 
-            if (googleDriveUpdatedAt > localUpdatedAt) {
-              await indexedDBHelper.saveMemo(googleDriveMemo)
-            }
+        const latestMemos = await indexedDBHelper.getAllMemos()
+        for (const memo of latestMemos) {
+          const googleDriveFile = googleDriveFiles.find(file => file.id === memo.googleDriveFileId)
+          if (shouldUploadMemo(memo, googleDriveFile)) {
+            await syncMemoToGoogleDrive(memo, googleDriveFolderId)
           }
         }
 
         await loadMemoList()
-        console.log('定期同期が完了しました')
+        console.log('定期同期が完了しました（ローカルとGoogle Driveの双方向同期）')
       } catch (error) {
         console.error('定期同期エラー:', error)
       }
@@ -463,13 +597,14 @@ function AppContent() {
   }
 
   const handleSave = async () => {
+    const existingMemo = (await indexedDBHelper.getAllMemos()).find(memo => memo.id === memoId)
     const memo: Memo = {
       id: memoId,
       title: memoTitle,
       lines: lines,
       createdAt: memoCreatedAt,
       updatedAt: new Date(),
-      googleDriveFileId: undefined // まだGoogle Driveに保存していない
+      googleDriveFileId: existingMemo?.googleDriveFileId
     }
     
     // ローカルに保存
@@ -480,24 +615,8 @@ function AppContent() {
     // Google Driveに保存（連携済みの場合）
     if (googleDriveStatus === 'connected' && googleDriveFolderId) {
       try {
-        const memoData = JSON.stringify(memo)
-        let googleDriveFileId: string
-        
-        if (memo.googleDriveFileId) {
-          // 既存のファイルを更新
-          await googleDriveHelper.updateFile(memo.googleDriveFileId, memoData)
-          googleDriveFileId = memo.googleDriveFileId
-        } else {
-          // 新規ファイルを作成
-          const file = await googleDriveHelper.saveFile(googleDriveFolderId, `${memoTitle}.json`, memoData)
-          googleDriveFileId = file.id
-          
-          // Google DriveファイルIDを保存
-          memo.googleDriveFileId = googleDriveFileId
-          await indexedDBHelper.saveMemo(memo)
-          await loadMemoList()
-        }
-        
+        await syncMemoToGoogleDrive(memo, googleDriveFolderId)
+        await loadMemoList()
         alert('保存しました（Google Driveにも保存されました）')
       } catch (error) {
         console.error('Google Drive保存エラー:', error)
@@ -529,6 +648,31 @@ function AppContent() {
     setStagePos({ x: 0, y: 0 })
     setCurrentLine(null)
     setViewMode('editor')
+  }
+
+  const handleDeleteMemo = async () => {
+    if (!deleteTargetMemo) return
+
+    try {
+      // ローカルから削除
+      await indexedDBHelper.deleteMemo(deleteTargetMemo.id)
+
+      // Google Driveから削除（連携済みの場合）
+      if (googleDriveStatus === 'connected' && deleteTargetMemo.googleDriveFileId) {
+        try {
+          await googleDriveHelper.deleteFile(deleteTargetMemo.googleDriveFileId)
+        } catch (error) {
+          console.error('Google Drive削除エラー:', error)
+          alert('ローカルから削除しましたが、Google Driveからの削除に失敗しました')
+        }
+      }
+
+      await loadMemoList()
+      setDeleteTargetMemo(null)
+    } catch (error) {
+      console.error('削除エラー:', error)
+      alert('削除に失敗しました')
+    }
   }
 
   const formatDateTime = (value: Date) => {
@@ -579,6 +723,7 @@ function AppContent() {
     <div className="App">
       <div className="toolbar">
         <div className="toolbar-left">
+          <button className="help-button" onClick={() => setIsSaveHelpOpen(true)}>?</button>
           {isEditingTitle ? (
             <input
               type="text"
@@ -634,6 +779,34 @@ function AppContent() {
           </div>
         </div>
       </div>
+      {isSaveHelpOpen && (
+        <div className="modal-overlay" onClick={() => setIsSaveHelpOpen(false)}>
+          <div className="save-help-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>保存のしくみ</h3>
+            <ul>
+              <li>描画やタイトルを変更すると、約0.5秒後にローカルへ自動保存します。</li>
+              <li>Google Drive連携済みの場合、5分おきに更新日時を確認し、変更があるメモだけGoogle Driveへアップロードします。</li>
+              <li>5分おきの同期では、Google Drive側の更新日時も確認し、変更があるメモだけローカルへダウンロードします。</li>
+              <li>ツールバーの保存ボタンを押すと、ローカルへ保存し、Google Drive連携済みならすぐGoogle Driveにも保存します。</li>
+              <li>Google Drive未連携の場合は、ローカル保存のみ行います。</li>
+            </ul>
+            <button onClick={() => setIsSaveHelpOpen(false)}>閉じる</button>
+          </div>
+        </div>
+      )}
+      {deleteTargetMemo && (
+        <div className="modal-overlay" onClick={() => setDeleteTargetMemo(null)}>
+          <div className="delete-confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>削除の確認</h3>
+            <p>「{deleteTargetMemo.title}」を削除してもよろしいですか？</p>
+            <p className="delete-warning">削除したメモは復元できません。</p>
+            <div className="modal-buttons">
+              <button className="cancel-button" onClick={() => setDeleteTargetMemo(null)}>キャンセル</button>
+              <button className="delete-confirm-button" onClick={handleDeleteMemo}>削除</button>
+            </div>
+          </div>
+        </div>
+      )}
       {viewMode === 'list' ? (
         <div className="memo-list-container">
           <div className="memo-list-header">
@@ -654,11 +827,17 @@ function AppContent() {
           ) : (
             <div className="memo-list">
               {memoList.map((memo) => (
-                <button className="memo-list-item" key={memo.id} onClick={() => handleOpenMemo(memo)}>
-                  <span className="memo-list-title">{memo.title}</span>
-                  <span className="memo-list-meta">作成: {formatDateTime(memo.createdAt)}</span>
-                  <span className="memo-list-meta">更新: {formatDateTime(memo.updatedAt)}</span>
-                </button>
+                <div className="memo-list-item" key={memo.id} onClick={() => handleOpenMemo(memo)}>
+                  <div className="memo-list-info">
+                    <span className="memo-list-title">{memo.title}</span>
+                    <span className="memo-list-meta">作成: {formatDateTime(memo.createdAt)}</span>
+                    <span className="memo-list-meta">更新: {formatDateTime(memo.updatedAt)}</span>
+                  </div>
+                  <div className="memo-list-right">
+                    <MemoThumbnail lines={memo.lines} />
+                    <button className="delete-button" onClick={(e) => { e.stopPropagation(); setDeleteTargetMemo(memo); }}>削除</button>
+                  </div>
+                </div>
               ))}
             </div>
           )}

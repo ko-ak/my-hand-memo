@@ -19,6 +19,7 @@ export interface Memo {
   createdAt: Date
   updatedAt: Date
   googleDriveFileId?: string
+  googleDriveSyncedAt?: Date
 }
 
 export const indexedDBHelper = {
