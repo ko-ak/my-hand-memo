@@ -68,6 +68,17 @@ export class GoogleDriveHelper {
     })
   }
 
+  async findFolder(folderName: string): Promise<GoogleDriveFile | null> {
+    if (!this.accessToken) {
+      throw new Error('Not signed in')
+    }
+
+    const query = encodeURIComponent(`name = '${folderName}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`)
+    const response = await this.request<{ files?: GoogleDriveFile[] }>(`https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name,modifiedTime,webViewLink)`)
+    const files = response.files || []
+    return files.length > 0 ? files[0] : null
+  }
+
   async saveFile(folderId: string, fileName: string, content: string): Promise<GoogleDriveFile> {
     if (!this.accessToken) {
       throw new Error('Not signed in')

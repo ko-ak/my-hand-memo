@@ -93,29 +93,49 @@ function AppContent() {
   const [googleDriveFolderId, setGoogleDriveFolderId] = useState<string | null>(null)
   const [isSaveHelpOpen, setIsSaveHelpOpen] = useState(false)
   const [deleteTargetMemo, setDeleteTargetMemo] = useState<Memo | null>(null)
+  const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false)
+  const authTimeoutRef = useRef<number | null>(null)
 
   const googleLogin = useGoogleLogin({
     onSuccess: async (tokenResponse) => {
       googleDriveHelper.setAccessToken(tokenResponse.access_token)
       
       try {
-        // Google Driveフォルダを作成
-        const folder = await googleDriveHelper.createFolder('手書きメモ')
+        // 既存の「手書きメモ」フォルダを検索
+        let folder = await googleDriveHelper.findFolder('手書きメモ')
+        
+        // 存在しない場合のみ新規作成
+        if (!folder) {
+          folder = await googleDriveHelper.createFolder('手書きメモ')
+        }
+        
         setGoogleDriveFolderId(folder.id)
         
         // ローカルストレージに保存
         localStorage.setItem('googleDriveFolderId', folder.id)
         
+        if (authTimeoutRef.current) {
+          window.clearTimeout(authTimeoutRef.current)
+          authTimeoutRef.current = null
+        }
         setGoogleDriveStatus('connected')
       } catch (error) {
         console.error('Google Driveフォルダ作成エラー:', error)
         alert('Google Driveフォルダの作成に失敗しました')
+        if (authTimeoutRef.current) {
+          window.clearTimeout(authTimeoutRef.current)
+          authTimeoutRef.current = null
+        }
         setGoogleDriveStatus('not-connected')
       }
     },
     onError: (error) => {
       console.error('Google Login Error:', error)
       alert('Google認証に失敗しました')
+      if (authTimeoutRef.current) {
+        window.clearTimeout(authTimeoutRef.current)
+        authTimeoutRef.current = null
+      }
       setGoogleDriveStatus('not-connected')
     },
     scope: 'https://www.googleapis.com/auth/drive.file'
@@ -142,9 +162,23 @@ function AppContent() {
   const lastSavedSnapshotRef = useRef('')
   const penSideButtonPointersRef = useRef<Set<number>>(new Set())
 
-  const createDefaultTitle = () => {
+  const createDefaultTitle = async () => {
     const now = new Date()
-    return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_`
+    const baseTitle = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_`
+    
+    const memos = await indexedDBHelper.getAllMemos()
+    const existingTitles = new Set(memos.map(m => m.title))
+    
+    if (!existingTitles.has(baseTitle)) {
+      return baseTitle
+    }
+
+    let counter = 1
+    while (existingTitles.has(`${baseTitle}(${counter})`)) {
+      counter++
+    }
+    
+    return `${baseTitle}(${counter})`
   }
 
   const syncMemoToGoogleDrive = async (memo: Memo, folderId: string): Promise<Memo> => {
@@ -202,6 +236,7 @@ function AppContent() {
     if (googleDriveStatus === 'connected' && googleDriveFolderId) {
       try {
         const googleDriveFiles = await googleDriveHelper.listFiles(googleDriveFolderId)
+        const googleDriveFileIds = new Set(googleDriveFiles.map(f => f.id))
         
         // Google Driveのファイルをローカルに同期
         for (const file of googleDriveFiles) {
@@ -226,6 +261,17 @@ function AppContent() {
             memos[index] = googleDriveMemo
           }
         }
+
+        // ローカルにあるがGoogle Driveにないファイルを削除（同期済みのファイルのみ）
+        for (const memo of memos) {
+          if (memo.googleDriveFileId && !googleDriveFileIds.has(memo.googleDriveFileId)) {
+            await indexedDBHelper.deleteMemo(memo.id)
+            const index = memos.findIndex(m => m.id === memo.id)
+            if (index !== -1) {
+              memos.splice(index, 1)
+            }
+          }
+        }
       } catch (error) {
         console.error('Google Drive同期エラー:', error)
       }
@@ -236,12 +282,23 @@ function AppContent() {
 
   const handleGoogleDriveConnect = async () => {
     setGoogleDriveStatus('connecting')
+    if (authTimeoutRef.current) {
+      window.clearTimeout(authTimeoutRef.current)
+    }
+    authTimeoutRef.current = window.setTimeout(() => {
+      setGoogleDriveStatus('not-connected')
+      authTimeoutRef.current = null
+    }, 10000)
     try {
       await googleDriveHelper.initialize()
       googleLogin()
     } catch (error) {
       console.error('Google Drive連携エラー:', error)
       alert('Google Drive連携に失敗しました')
+      if (authTimeoutRef.current) {
+        window.clearTimeout(authTimeoutRef.current)
+        authTimeoutRef.current = null
+      }
       setGoogleDriveStatus('not-connected')
     }
   }
@@ -261,10 +318,15 @@ function AppContent() {
 
   useEffect(() => {
     const now = new Date()
-    setMemoTitle(createDefaultTitle())
     setMemoId(now.getTime().toString())
     setMemoCreatedAt(now)
     loadMemoList()
+    
+    const initializeTitle = async () => {
+      const title = await createDefaultTitle()
+      setMemoTitle(title)
+    }
+    initializeTitle()
 
     // Google Drive連携状態を復元
     const savedFolderId = localStorage.getItem('googleDriveFolderId')
@@ -276,6 +338,8 @@ function AppContent() {
         setGoogleDriveFolderId(null)
         localStorage.removeItem('googleDriveFolderId')
       })
+      
+      setGoogleDriveStatus('not-connected')
     }
 
     // ウィンドウサイズに合わせてStageのサイズを設定
@@ -333,6 +397,7 @@ function AppContent() {
       try {
         const memos = await indexedDBHelper.getAllMemos()
         const googleDriveFiles = await googleDriveHelper.listFiles(googleDriveFolderId)
+        const googleDriveFileIds = new Set(googleDriveFiles.map(f => f.id))
 
         // Google Driveのファイルをローカルに同期
         for (const file of googleDriveFiles) {
@@ -352,8 +417,16 @@ function AppContent() {
           await indexedDBHelper.saveMemo(googleDriveMemo)
         }
 
+        // ローカルにあるがGoogle Driveにないファイルを削除（同期済みのファイルのみ）
         const latestMemos = await indexedDBHelper.getAllMemos()
         for (const memo of latestMemos) {
+          if (memo.googleDriveFileId && !googleDriveFileIds.has(memo.googleDriveFileId)) {
+            await indexedDBHelper.deleteMemo(memo.id)
+          }
+        }
+
+        const finalMemos = await indexedDBHelper.getAllMemos()
+        for (const memo of finalMemos) {
           const googleDriveFile = googleDriveFiles.find(file => file.id === memo.googleDriveFileId)
           if (shouldUploadMemo(memo, googleDriveFile)) {
             await syncMemoToGoogleDrive(memo, googleDriveFolderId)
@@ -588,8 +661,21 @@ function AppContent() {
     setIsEditingTitle(true)
   }
 
-  const handleTitleBlur = () => {
+  const handleTitleBlur = async () => {
     setIsEditingTitle(false)
+    
+    // 重複チェック（自分以外のメモと同じタイトルの場合は自動的に連番を付与）
+    const memos = await indexedDBHelper.getAllMemos()
+    const existingMemo = memos.find(m => m.title === memoTitle && m.id !== memoId)
+    
+    if (existingMemo && memoTitle.trim() !== '') {
+      // 連番を付与
+      let counter = 1
+      while (memos.find(m => m.title === `${memoTitle}(${counter})` && m.id !== memoId)) {
+        counter++
+      }
+      setMemoTitle(`${memoTitle}(${counter})`)
+    }
   }
 
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -638,10 +724,11 @@ function AppContent() {
     setViewMode('editor')
   }
 
-  const handleNewMemo = () => {
+  const handleNewMemo = async () => {
     const now = new Date()
     setMemoId(now.getTime().toString())
-    setMemoTitle(createDefaultTitle())
+    const title = await createDefaultTitle()
+    setMemoTitle(title)
     setMemoCreatedAt(now)
     setLines([])
     setScale(1)
@@ -723,7 +810,9 @@ function AppContent() {
     <div className="App">
       <div className="toolbar">
         <div className="toolbar-left">
-          <button className="help-button" onClick={() => setIsSaveHelpOpen(true)}>?</button>
+          <button onClick={() => setViewMode(viewMode === 'editor' ? 'list' : 'editor')}>
+            {viewMode === 'editor' ? '一覧' : '編集'}
+          </button>
           {isEditingTitle ? (
             <input
               type="text"
@@ -738,31 +827,11 @@ function AppContent() {
               {memoTitle}
             </h2>
           )}
+          <button onClick={handleSave}>保存</button>
+          <button className="help-button" onClick={() => setIsSaveHelpOpen(true)}>?</button>
+          <button onClick={() => setIsClearConfirmOpen(true)}>クリア</button>
         </div>
         <div className="toolbar-right">
-          <div className="tool-group">
-            <label>色:</label>
-            <input type="color" value={penColor} onChange={(e) => setPenColor(e.target.value)} />
-          </div>
-          <div className="tool-group">
-            <button className={toolMode === 'pen' ? 'active' : ''} onClick={() => setToolMode('pen')}>ペン</button>
-            <button className={toolMode === 'eraser' ? 'active' : ''} onClick={() => setToolMode('eraser')}>消しゴム</button>
-          </div>
-          <div className="tool-group">
-            <label>太さ:</label>
-            <input type="range" min="1" max="20" value={penWidth} onChange={(e) => setPenWidth(Number(e.target.value))} />
-            <span>{penWidth}px</span>
-          </div>
-          <div className="tool-group">
-            <button onClick={handleZoomOut}>-</button>
-            <button onClick={handleZoomIn}>+</button>
-            <button onClick={handleResetZoom}>リセット</button>
-          </div>
-          <button onClick={() => setViewMode(viewMode === 'editor' ? 'list' : 'editor')}>
-            {viewMode === 'editor' ? '一覧' : '編集'}
-          </button>
-          <button onClick={() => setLines([])}>クリア</button>
-          <button onClick={handleSave}>保存</button>
           <div className="tool-group">
             <button 
               className={touchMode === 'default' ? 'active' : ''}
@@ -776,6 +845,24 @@ function AppContent() {
             >
               描画
             </button>
+          </div>
+          <div className="tool-group">
+            <button onClick={handleZoomOut}>-</button>
+            <button onClick={handleZoomIn}>+</button>
+            <button onClick={handleResetZoom}>リセット</button>
+          </div>
+          <div className="tool-group">
+            <label>色:</label>
+            <input type="color" value={penColor} onChange={(e) => setPenColor(e.target.value)} />
+          </div>
+          <div className="tool-group">
+            <label>太さ:</label>
+            <input type="range" min="1" max="20" value={penWidth} onChange={(e) => setPenWidth(Number(e.target.value))} />
+            <span>{penWidth}px</span>
+          </div>
+          <div className="tool-group">
+            <button className={toolMode === 'pen' ? 'active' : ''} onClick={() => setToolMode('pen')}>ペン</button>
+            <button className={toolMode === 'eraser' ? 'active' : ''} onClick={() => setToolMode('eraser')}>消しゴム</button>
           </div>
         </div>
       </div>
@@ -803,6 +890,19 @@ function AppContent() {
             <div className="modal-buttons">
               <button className="cancel-button" onClick={() => setDeleteTargetMemo(null)}>キャンセル</button>
               <button className="delete-confirm-button" onClick={handleDeleteMemo}>削除</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {isClearConfirmOpen && (
+        <div className="modal-overlay" onClick={() => setIsClearConfirmOpen(false)}>
+          <div className="delete-confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>クリアの確認</h3>
+            <p>内容を削除しますか？</p>
+            <p className="delete-warning">削除した内容は復元できません。</p>
+            <div className="modal-buttons">
+              <button className="cancel-button" onClick={() => setIsClearConfirmOpen(false)}>キャンセル</button>
+              <button className="delete-confirm-button" onClick={() => { setLines([]); setIsClearConfirmOpen(false); }}>クリア</button>
             </div>
           </div>
         </div>
