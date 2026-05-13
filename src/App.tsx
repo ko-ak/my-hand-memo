@@ -94,6 +94,7 @@ function AppContent() {
   const [isSaveHelpOpen, setIsSaveHelpOpen] = useState(false)
   const [deleteTargetMemo, setDeleteTargetMemo] = useState<Memo | null>(null)
   const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false)
+  const [isReauthPromptOpen, setIsReauthPromptOpen] = useState(false)
   const authTimeoutRef = useRef<number | null>(null)
 
   const googleLogin = useGoogleLogin({
@@ -119,6 +120,7 @@ function AppContent() {
           authTimeoutRef.current = null
         }
         setGoogleDriveStatus('connected')
+        await loadMemoList()
       } catch (error) {
         console.error('Google Driveフォルダ作成エラー:', error)
         alert('Google Driveフォルダの作成に失敗しました')
@@ -339,7 +341,8 @@ function AppContent() {
         localStorage.removeItem('googleDriveFolderId')
       })
       
-      setGoogleDriveStatus('not-connected')
+      // 連携確認モーダルを表示
+      setIsReauthPromptOpen(true)
     }
 
     // ウィンドウサイズに合わせてStageのサイズを設定
@@ -903,6 +906,18 @@ function AppContent() {
             <div className="modal-buttons">
               <button className="cancel-button" onClick={() => setIsClearConfirmOpen(false)}>キャンセル</button>
               <button className="delete-confirm-button" onClick={() => { setLines([]); setIsClearConfirmOpen(false); }}>クリア</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {isReauthPromptOpen && (
+        <div className="modal-overlay" onClick={() => setIsReauthPromptOpen(false)}>
+          <div className="delete-confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Google Drive連携</h3>
+            <p>Google Driveに連携しますか？</p>
+            <div className="modal-buttons">
+              <button className="cancel-button" onClick={() => setIsReauthPromptOpen(false)}>いいえ</button>
+              <button className="delete-confirm-button" onClick={() => { setIsReauthPromptOpen(false); handleGoogleDriveConnect(); }}>はい</button>
             </div>
           </div>
         </div>
