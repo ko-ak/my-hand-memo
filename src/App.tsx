@@ -1194,9 +1194,6 @@ function AppContent({ firebaseUser, onSignOut }: { firebaseUser: User, onSignOut
           </Stage>
         </div>
       )}
-      <div className="info">
-        <p>ヒント: 中クリックまたはShift+クリックで画面移動 | デフォルトモード: 指でパン、2本指でズーム | 描画モード: 指で描画、2本指でパン・ズーム</p>
-      </div>
     </div>
   )
 }

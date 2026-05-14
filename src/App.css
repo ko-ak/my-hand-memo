@@ -143,13 +143,6 @@ button.active {
   width: 200px;
 }
 
-.info {
-  margin-top: 20px;
-  text-align: center;
-  color: #666;
-  font-size: 0.9em;
-}
-
 .memo-list-container {
   flex: 1;
   overflow: auto;
@@ -674,11 +667,6 @@ button.active {
     width: 100%;
     text-align: center;
     margin-bottom: 8px;
-  }
-
-  .info p {
-    font-size: 12px;
-    padding: 8px;
   }
 
   .progress-modal {
