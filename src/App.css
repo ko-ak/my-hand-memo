@@ -216,6 +216,8 @@ button.active {
   width: 128px;
   height: 128px;
   background-color: white;
+  overflow: hidden;
+  border-radius: 4px;
   background-image: radial-gradient(circle, #ccc 1px, transparent 1px);
   background-size: 12px 12px;
   border: 1px solid #eee;
@@ -594,17 +596,21 @@ button.active {
   }
 
   .memo-list {
+    grid-template-columns: 1fr;
     gap: 12px;
   }
 
   .memo-list-item {
     width: 100%;
     min-width: unset;
+    flex-wrap: wrap;
   }
 
   .memo-thumbnail {
     width: 80px;
     height: 80px;
+    overflow: hidden;
+    border-radius: 4px;
   }
 
   .memo-list-header {
