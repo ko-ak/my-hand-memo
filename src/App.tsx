@@ -95,6 +95,7 @@ function AppContent({ firebaseUser, onSignOut }: { firebaseUser: User, onSignOut
   const [googleDriveFolderId, setGoogleDriveFolderId] = useState<string | null>(null)
   const [isSaveHelpOpen, setIsSaveHelpOpen] = useState(false)
   const [deleteTargetMemo, setDeleteTargetMemo] = useState<Memo | null>(null)
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false)
   const [isReauthPromptOpen, setIsReauthPromptOpen] = useState(false)
   const authTimeoutRef = useRef<number | null>(null)
@@ -961,10 +962,17 @@ function AppContent({ firebaseUser, onSignOut }: { firebaseUser: User, onSignOut
               {memoTitle}
             </h2>
           )}
-          <button onClick={handleSync} disabled={googleDriveStatus !== 'connected'} title={googleDriveStatus !== 'connected' ? 'Google Drive未連携' : '同期'}>同期</button>
-          <button onClick={handleSave}>保存</button>
-          <button className="help-button" onClick={() => setIsSaveHelpOpen(true)}>?</button>
-          <button onClick={() => setIsClearConfirmOpen(true)}>クリア</button>
+          <span className="mobile-toolbar">
+            <button onClick={handleSync} disabled={googleDriveStatus !== 'connected'} title={googleDriveStatus !== 'connected' ? 'Google Drive未連携' : '同期'}>同期</button>
+            <button onClick={() => setIsClearConfirmOpen(true)}>クリア</button>
+            <button className="mobile-menu-button" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} aria-label="メニュー">☰</button>
+          </span>
+          <span className="desktop-toolbar">
+            <button onClick={handleSync} disabled={googleDriveStatus !== 'connected'} title={googleDriveStatus !== 'connected' ? 'Google Drive未連携' : '同期'}>同期</button>
+            <button onClick={handleSave}>保存</button>
+            <button className="help-button" onClick={() => setIsSaveHelpOpen(true)}>?</button>
+            <button onClick={() => setIsClearConfirmOpen(true)}>クリア</button>
+          </span>
         </div>
         <div className="toolbar-right">
           <div className="tool-group">
@@ -1039,6 +1047,46 @@ function AppContent({ firebaseUser, onSignOut }: { firebaseUser: User, onSignOut
               <button className="cancel-button" onClick={() => setIsClearConfirmOpen(false)}>キャンセル</button>
               <button className="delete-confirm-button" onClick={() => { setLines([]); setIsClearConfirmOpen(false); }}>クリア</button>
             </div>
+          </div>
+        </div>
+      )}
+      {isMobileMenuOpen && (
+        <div className="mobile-menu-overlay" onClick={() => setIsMobileMenuOpen(false)}>
+          <div className="mobile-menu" onClick={(e) => e.stopPropagation()}>
+            <button onClick={() => { handleSave(); setIsMobileMenuOpen(false); }}>保存</button>
+            <button className="help-button" onClick={() => { setIsSaveHelpOpen(true); setIsMobileMenuOpen(false); }}>?</button>
+            <div className="mobile-menu-divider"></div>
+            <div className="mobile-tool-group">
+              <label>ペンの太さ: {penWidth}px</label>
+              <input
+                type="range"
+                min="1"
+                max="20"
+                value={penWidth}
+                onChange={(e) => setPenWidth(Number(e.target.value))}
+              />
+            </div>
+            <div className="mobile-tool-group">
+              <label>ペンの色:</label>
+              <input
+                type="color"
+                value={penColor}
+                onChange={(e) => setPenColor(e.target.value)}
+              />
+            </div>
+            <button 
+              className={touchMode === 'default' ? 'active' : ''}
+              onClick={() => setTouchMode('default')}
+            >
+              移動
+            </button>
+            <button 
+              className={touchMode === 'draw' ? 'active' : ''}
+              onClick={() => setTouchMode('draw')}
+            >
+              指で書く
+            </button>
+            <button onClick={() => setIsMobileMenuOpen(false)} className="close-menu">閉じる</button>
           </div>
         </div>
       )}
