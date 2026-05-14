@@ -342,6 +342,13 @@ function AppContent({ firebaseUser, onSignOut }: { firebaseUser: User, onSignOut
     }
   }
 
+  // Google Drive接続状態が変わったらメモリストを再取得
+  useEffect(() => {
+    if (googleDriveStatus === 'connected' && googleDriveFolderId) {
+      loadMemoList()
+    }
+  }, [googleDriveStatus, googleDriveFolderId])
+
   useEffect(() => {
     loadMemoList()
 
