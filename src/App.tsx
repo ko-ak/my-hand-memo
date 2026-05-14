@@ -4,6 +4,8 @@ import Konva from 'konva'
 import { indexedDBHelper, Memo, LineConfig } from './utils/indexedDB'
 import { googleDriveHelper } from './utils/googleDrive'
 import { GoogleOAuthProvider, useGoogleLogin, googleLogout } from '@react-oauth/google'
+import { firebaseSignIn, firebaseSignOut, onFirebaseAuthStateChanged } from './utils/firebase'
+import { User } from 'firebase/auth'
 import './App.css'
 
 const MemoThumbnail = ({ lines }: { lines: LineConfig[] }) => {
@@ -85,7 +87,7 @@ const MemoThumbnail = ({ lines }: { lines: LineConfig[] }) => {
 
 const CLIENT_ID = '205887830808-k14l2jn5u56fvrvf7hbet84gf4hj5k2e.apps.googleusercontent.com'
 
-function AppContent() {
+function AppContent({ firebaseUser, onSignOut }: { firebaseUser: User, onSignOut: () => Promise<void> }) {
   const [lines, setLines] = useState<LineConfig[]>([])
   const [memoList, setMemoList] = useState<Memo[]>([])
   const [viewMode, setViewMode] = useState<'editor' | 'list'>('list')
@@ -962,6 +964,7 @@ function AppContent() {
           <div className="memo-list-header">
             <h3>メモ一覧</h3>
             <div className="memo-list-actions">
+              <span className="login-user">{firebaseUser.displayName ?? firebaseUser.email}</span>
               {googleDriveStatus === 'connected' ? (
                 <button onClick={handleGoogleDriveDisconnect}>Google Driveを切断</button>
               ) : (
@@ -970,6 +973,7 @@ function AppContent() {
                 </button>
               )}
               <button onClick={handleNewMemo}>新規作成</button>
+              <button className="signout-button" onClick={onSignOut}>ログアウト</button>
             </div>
           </div>
           {memoList.length === 0 ? (
@@ -1023,10 +1027,59 @@ function AppContent() {
   )
 }
 
+function LoginScreen({ onLogin }: { onLogin: () => void }) {
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const handleLogin = async () => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      await firebaseSignIn()
+      onLogin()
+    } catch (err) {
+      console.error('ログインエラー:', err)
+      setError('ログインに失敗しました。もう一度お試しください。')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  return (
+    <div className="login-screen">
+      <div className="login-card">
+        <h1>手書きメモ</h1>
+        <p>Googleアカウントでログインしてください</p>
+        {error && <p className="login-error">{error}</p>}
+        <button className="login-button" onClick={handleLogin} disabled={isLoading}>
+          {isLoading ? 'ログイン中...' : 'Googleでログイン'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function App() {
+  const [firebaseUser, setFirebaseUser] = useState<User | null | undefined>(undefined)
+
+  useEffect(() => {
+    const unsubscribe = onFirebaseAuthStateChanged((user) => {
+      setFirebaseUser(user)
+    })
+    return () => unsubscribe()
+  }, [])
+
+  if (firebaseUser === undefined) {
+    return <div className="login-screen"><div className="login-card"><p>読み込み中...</p></div></div>
+  }
+
+  if (firebaseUser === null) {
+    return <LoginScreen onLogin={() => {}} />
+  }
+
   return (
     <GoogleOAuthProvider clientId={CLIENT_ID}>
-      <AppContent />
+      <AppContent firebaseUser={firebaseUser} onSignOut={async () => { await firebaseSignOut() }} />
     </GoogleOAuthProvider>
   )
 }

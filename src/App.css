@@ -297,3 +297,76 @@ button.active {
   text-align: center;
 }
 
+.login-screen {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  background-color: #f5f5f5;
+}
+
+.login-card {
+  background: white;
+  border-radius: 12px;
+  padding: 48px 40px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.12);
+  text-align: center;
+  min-width: 320px;
+}
+
+.login-card h1 {
+  font-size: 1.8em;
+  margin-bottom: 8px;
+  color: #333;
+}
+
+.login-card p {
+  color: #666;
+  margin-bottom: 24px;
+}
+
+.login-button {
+  background-color: #4285f4;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 12px 32px;
+  font-size: 1em;
+  cursor: pointer;
+  width: 100%;
+}
+
+.login-button:hover {
+  background-color: #3367d6;
+}
+
+.login-button:disabled {
+  background-color: #aaa;
+  cursor: not-allowed;
+}
+
+.login-error {
+  color: #d32f2f;
+  margin-bottom: 16px;
+}
+
+.login-user {
+  font-size: 0.9em;
+  color: #555;
+  margin-right: 8px;
+}
+
+.signout-button {
+  background-color: #f5f5f5;
+  color: #333;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 4px 12px;
+  font-size: 0.9em;
+  cursor: pointer;
+}
+
+.signout-button:hover {
+  background-color: #e0e0e0;
+}
+
