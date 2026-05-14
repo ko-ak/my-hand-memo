@@ -963,8 +963,8 @@ function AppContent({ firebaseUser, onSignOut }: { firebaseUser: User, onSignOut
             </h2>
           )}
           <span className="mobile-toolbar">
-            <button onClick={handleSync} disabled={googleDriveStatus !== 'connected'} title={googleDriveStatus !== 'connected' ? 'Google Drive未連携' : '同期'}>同期</button>
-            <button onClick={() => setIsClearConfirmOpen(true)}>クリア</button>
+            <button className={toolMode === 'pen' ? 'active' : ''} onClick={() => setToolMode('pen')}>ペン</button>
+            <button className={toolMode === 'eraser' ? 'active' : ''} onClick={() => setToolMode('eraser')}>消しゴム</button>
             <button className="mobile-menu-button" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} aria-label="メニュー">☰</button>
           </span>
           <span className="desktop-toolbar">
