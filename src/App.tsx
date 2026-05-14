@@ -356,10 +356,10 @@ function AppContent() {
         setGoogleDriveFolderId(null)
         localStorage.removeItem('googleDriveFolderId')
       })
-      
-      // 連携確認モーダルを表示
-      setIsReauthPromptOpen(true)
     }
+
+    // 常に連携確認モーダルを表示
+    setIsReauthPromptOpen(true)
 
     // ウィンドウサイズに合わせてStageのサイズを設定
     const updateStageSize = () => {
