@@ -473,6 +473,7 @@ button.active {
   border: 1px solid #ddd;
   border-radius: 8px;
   background: #f8f8f8;
+  color: #333;
   flex-shrink: 0;
 }
 
@@ -484,6 +485,7 @@ button.active {
   justify-content: center;
   padding: 10px 20px;
   text-align: center;
+  color: #333;
 }
 
 .mobile-menu button.active {
