@@ -757,6 +757,77 @@ function AppContent({ firebaseUser, onSignOut }: { firebaseUser: User, onSignOut
     }
   }
 
+  const handleSync = async () => {
+    if (googleDriveStatus !== 'connected' || !googleDriveFolderId) {
+      alert('Google Driveに連携されていません')
+      return
+    }
+
+    // 未保存の変更がある場合は保存してから同期
+    const currentSnapshot = JSON.stringify({ memoId, memoTitle, lines })
+    if (currentSnapshot !== lastSavedSnapshotRef.current && viewMode === 'editor') {
+      const existingMemo = (await indexedDBHelper.getAllMemos()).find(memo => memo.id === memoId)
+      const memo: Memo = {
+        id: memoId,
+        title: memoTitle,
+        lines: lines,
+        createdAt: memoCreatedAt,
+        updatedAt: new Date(),
+        googleDriveFileId: existingMemo?.googleDriveFileId
+      }
+      await indexedDBHelper.saveMemo(memo)
+      lastSavedSnapshotRef.current = currentSnapshot
+      if (googleDriveFolderId) {
+        await syncMemoToGoogleDrive(memo, googleDriveFolderId)
+      }
+    }
+
+    try {
+      const memos = await indexedDBHelper.getAllMemos()
+      const googleDriveFiles = await googleDriveHelper.listFiles(googleDriveFolderId)
+      const googleDriveFileIds = new Set(googleDriveFiles.map(f => f.id))
+
+      // Google Driveのファイルをローカルに同期
+      for (const file of googleDriveFiles) {
+        const localMemo = memos.find(m => m.googleDriveFileId === file.id)
+        if (!shouldDownloadMemo(localMemo, file)) continue
+        const fileData = await googleDriveHelper.getFile(file.id)
+        const googleDriveMemo: Memo = {
+          ...JSON.parse(fileData),
+          googleDriveFileId: file.id,
+          googleDriveSyncedAt: new Date()
+        }
+        const fileNameWithoutExt = file.name.replace('.json', '')
+        if (googleDriveMemo.title !== fileNameWithoutExt) {
+          googleDriveMemo.title = fileNameWithoutExt
+        }
+        await indexedDBHelper.saveMemo(googleDriveMemo)
+      }
+
+      // ローカルにあるがGoogle Driveにないファイルを削除（同期済みのみ）
+      for (const memo of memos) {
+        if (memo.googleDriveFileId && !googleDriveFileIds.has(memo.googleDriveFileId)) {
+          await indexedDBHelper.deleteMemo(memo.id)
+        }
+      }
+
+      // ローカルからGoogle Driveへアップロード
+      const latestMemos = await indexedDBHelper.getAllMemos()
+      for (const memo of latestMemos) {
+        const driveFile = googleDriveFiles.find(f => f.id === memo.googleDriveFileId)
+        if (shouldUploadMemo(memo, driveFile)) {
+          await syncMemoToGoogleDrive(memo, googleDriveFolderId)
+        }
+      }
+
+      await loadMemoList()
+      alert('同期が完了しました')
+    } catch (error) {
+      console.error('同期エラー:', error)
+      alert('同期に失敗しました')
+    }
+  }
+
   const handleOpenMemo = (memo: Memo) => {
     setMemoId(memo.id)
     setMemoTitle(memo.title)
@@ -871,6 +942,7 @@ function AppContent({ firebaseUser, onSignOut }: { firebaseUser: User, onSignOut
               {memoTitle}
             </h2>
           )}
+          <button onClick={handleSync} disabled={googleDriveStatus !== 'connected'} title={googleDriveStatus !== 'connected' ? 'Google Drive未連携' : '同期'}>同期</button>
           <button onClick={handleSave}>保存</button>
           <button className="help-button" onClick={() => setIsSaveHelpOpen(true)}>?</button>
           <button onClick={() => setIsClearConfirmOpen(true)}>クリア</button>
