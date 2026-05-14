@@ -1054,10 +1054,9 @@ function AppContent({ firebaseUser, onSignOut }: { firebaseUser: User, onSignOut
         <div className="mobile-menu-overlay" onClick={() => setIsMobileMenuOpen(false)}>
           <div className="mobile-menu" onClick={(e) => e.stopPropagation()}>
             <div className="mobile-menu-content">
-              <button onClick={() => { handleSave(); setIsMobileMenuOpen(false); }}>保存</button>
               <div className="mobile-button-row">
+                <button onClick={() => { handleSave(); setIsMobileMenuOpen(false); }}>保存</button>
                 <button className="help-button" onClick={() => { setIsSaveHelpOpen(true); setIsMobileMenuOpen(false); }}>？</button>
-                <button onClick={() => { setIsClearConfirmOpen(true); setIsMobileMenuOpen(false); }}>クリア</button>
               </div>
               <div className="mobile-menu-divider"></div>
               <div className="mobile-tool-group">

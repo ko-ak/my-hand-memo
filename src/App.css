@@ -479,7 +479,7 @@ button.active {
   min-height: 44px;
   font-size: 16px;
   padding: 10px 14px;
-  text-align: left;
+  text-align: center;
   border: 1px solid #ddd;
   border-radius: 8px;
   background: #f8f8f8;
