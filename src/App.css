@@ -16,7 +16,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 20px;
+  padding: 8px 20px;
   background-color: #f5f5f5;
   border-bottom: 1px solid #ddd;
   flex-shrink: 0;
@@ -93,6 +93,35 @@ button {
   color: white;
   cursor: pointer;
   transition: border-color 0.25s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+}
+
+button .material-icons {
+  font-size: 20px;
+  margin: 0;
+}
+
+button .icon {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+}
+
+.toolbar-right .material-icons {
+  font-size: 20px;
+  margin-right: 8px;
+}
+
+.toolbar-right button .material-icons {
+  margin-right: 0;
+}
+
+.mobile-tool-group .material-icons {
+  font-size: 20px;
+  margin-right: 8px;
 }
 
 button:hover {
@@ -170,6 +199,14 @@ button.active {
 .memo-list-actions {
   display: flex;
   gap: 10px;
+  align-items: center;
+}
+
+.memo-list-actions button {
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  padding: 0;
 }
 
 .memo-list {
@@ -228,7 +265,10 @@ button.active {
 }
 
 .delete-button {
-  padding: 0.4em 1.2em;
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  padding: 0;
   background-color: #dc3545;
 }
 
@@ -362,9 +402,9 @@ button.active {
 }
 
 .signout-button {
-  background-color: #f5f5f5;
-  color: #333;
-  border: 1px solid #ddd;
+  background-color: #666;
+  color: white;
+  border: 1px solid #555;
   border-radius: 4px;
   padding: 4px 12px;
   font-size: 0.9em;
@@ -426,6 +466,20 @@ button.active {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.toolbar-left > button,
+.desktop-toolbar button,
+.toolbar-right .tool-group button {
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  padding: 0;
+}
+
+.desktop-toolbar .help-button {
+  width: 34px;
+  height: 34px;
 }
 
 .mobile-menu-button {
@@ -669,9 +723,11 @@ button.active {
 
   .memo-list-actions button {
     min-height: 44px;
+    min-width: 44px;
+    width: 44px;
+    height: 44px;
     font-size: 14px;
-    flex: 1;
-    min-width: 100px;
+    flex: unset;
   }
 
   .login-user {
@@ -693,7 +749,7 @@ button.active {
   }
 
   .memo-list-actions button {
-    min-width: 80px;
+    min-width: unset;
     font-size: 12px;
   }
 

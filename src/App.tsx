@@ -1,12 +1,15 @@
-import { useRef, useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Stage, Layer, Line } from 'react-konva'
 import Konva from 'konva'
-import { indexedDBHelper, Memo, LineConfig } from './utils/indexedDB'
+import { useGoogleLogin, GoogleOAuthProvider, googleLogout } from '@react-oauth/google'
 import { googleDriveHelper } from './utils/googleDrive'
-import { GoogleOAuthProvider, useGoogleLogin, googleLogout } from '@react-oauth/google'
+import { indexedDBHelper } from './utils/indexedDB'
+import type { LineConfig, Memo } from './utils/indexedDB'
+import WallArtIcon from './WallArtIcon'
+import RemoveSelectionIcon from './RemoveSelectionIcon'
+import './App.css'
 import { firebaseSignIn, firebaseSignOut, onFirebaseAuthStateChanged } from './utils/firebase'
 import { User } from 'firebase/auth'
-import './App.css'
 
 const MemoThumbnail = ({ lines }: { lines: LineConfig[] }) => {
   const thumbnailSize = 128
@@ -340,16 +343,7 @@ function AppContent({ firebaseUser, onSignOut }: { firebaseUser: User, onSignOut
   }
 
   useEffect(() => {
-    const now = new Date()
-    setMemoId(now.getTime().toString())
-    setMemoCreatedAt(now)
     loadMemoList()
-    
-    const initializeTitle = async () => {
-      const title = await createDefaultTitle()
-      setMemoTitle(title)
-    }
-    initializeTitle()
 
     // Google Drive連携状態を復元
     const savedFolderId = localStorage.getItem('googleDriveFolderId')
@@ -945,8 +939,8 @@ function AppContent({ firebaseUser, onSignOut }: { firebaseUser: User, onSignOut
     <div className="App">
       <div className="toolbar">
         <div className="toolbar-left">
-          <button onClick={() => setViewMode(viewMode === 'editor' ? 'list' : 'editor')}>
-            {viewMode === 'editor' ? '一覧' : '編集'}
+          <button onClick={() => setViewMode(viewMode === 'editor' ? 'list' : 'editor')} title={viewMode === 'editor' ? '一覧' : '編集'}>
+            {viewMode === 'editor' ? <span className="material-icons">view_list</span> : <WallArtIcon className="icon" />}
           </button>
           {isEditingTitle ? (
             <input
@@ -963,49 +957,51 @@ function AppContent({ firebaseUser, onSignOut }: { firebaseUser: User, onSignOut
             </h2>
           )}
           <span className="mobile-toolbar">
-            <button className={toolMode === 'pen' ? 'active' : ''} onClick={() => setToolMode('pen')}>ペン</button>
-            <button className={toolMode === 'eraser' ? 'active' : ''} onClick={() => setToolMode('eraser')}>消しゴム</button>
-            <button className="mobile-menu-button" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} aria-label="メニュー">☰</button>
+            <button className={toolMode === 'pen' ? 'active' : ''} onClick={() => setToolMode('pen')} title="ペン"><span className="material-icons">edit</span></button>
+            <button className={toolMode === 'eraser' ? 'active' : ''} onClick={() => setToolMode('eraser')} title="消しゴム"><span className="material-icons">auto_fix_high</span></button>
+            <button className="mobile-menu-button" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} aria-label="メニュー"><span className="material-icons">menu</span></button>
           </span>
           <span className="desktop-toolbar">
-            <button onClick={handleSync} disabled={googleDriveStatus !== 'connected'} title={googleDriveStatus !== 'connected' ? 'Google Drive未連携' : '同期'}>同期</button>
-            <button onClick={handleSave}>保存</button>
-            <button className="help-button" onClick={() => setIsSaveHelpOpen(true)}>?</button>
-            <button onClick={() => setIsClearConfirmOpen(true)}>クリア</button>
+            <button onClick={handleSync} disabled={googleDriveStatus !== 'connected'} title={googleDriveStatus !== 'connected' ? 'Google Drive未連携' : '同期'}><span className="material-icons">cloud_sync</span></button>
+            <button onClick={handleSave} title="保存"><span className="material-icons">backup</span></button>
+            <button className="help-button" onClick={() => setIsSaveHelpOpen(true)} title="ヘルプ"><span className="material-icons">help</span></button>
+            <button onClick={() => setIsClearConfirmOpen(true)} title="クリア"><RemoveSelectionIcon className="icon" /></button>
           </span>
         </div>
         <div className="toolbar-right">
           <div className="tool-group">
-            <button 
+            <button
               className={touchMode === 'default' ? 'active' : ''}
               onClick={() => setTouchMode('default')}
+              title="デフォルト"
             >
-              デフォルト
+              <span className="material-icons">open_with</span>
             </button>
-            <button 
+            <button
               className={touchMode === 'draw' ? 'active' : ''}
               onClick={() => setTouchMode('draw')}
+              title="指で書く"
             >
-              描画
+              <span className="material-icons">gesture</span>
             </button>
           </div>
           <div className="tool-group">
-            <button onClick={handleZoomOut}>-</button>
-            <button onClick={handleZoomIn}>+</button>
-            <button onClick={handleResetZoom}>リセット</button>
+            <button onClick={handleZoomOut} title="ズームアウト"><span className="material-icons">zoom_out</span></button>
+            <button onClick={handleZoomIn} title="ズームイン"><span className="material-icons">zoom_in</span></button>
+            <button onClick={handleResetZoom} title="リセット"><span className="material-icons">refresh</span></button>
           </div>
           <div className="tool-group">
-            <label>色:</label>
+            <span className="material-icons" title="色">color_lens</span>
             <input type="color" value={penColor} onChange={(e) => setPenColor(e.target.value)} />
           </div>
           <div className="tool-group">
-            <label>太さ:</label>
+            <span className="material-icons" title="太さ">line_weight</span>
             <input type="range" min="1" max="20" value={penWidth} onChange={(e) => setPenWidth(Number(e.target.value))} />
             <span>{penWidth}px</span>
           </div>
           <div className="tool-group">
-            <button className={toolMode === 'pen' ? 'active' : ''} onClick={() => setToolMode('pen')}>ペン</button>
-            <button className={toolMode === 'eraser' ? 'active' : ''} onClick={() => setToolMode('eraser')}>消しゴム</button>
+            <button className={toolMode === 'pen' ? 'active' : ''} onClick={() => setToolMode('pen')} title="ペン"><span className="material-icons">edit</span></button>
+            <button className={toolMode === 'eraser' ? 'active' : ''} onClick={() => setToolMode('eraser')} title="消しゴム"><span className="material-icons">auto_fix_high</span></button>
           </div>
         </div>
       </div>
@@ -1055,13 +1051,13 @@ function AppContent({ firebaseUser, onSignOut }: { firebaseUser: User, onSignOut
           <div className="mobile-menu" onClick={(e) => e.stopPropagation()}>
             <div className="mobile-menu-content">
               <div className="mobile-button-row">
-                <button onClick={() => { handleSave(); setIsMobileMenuOpen(false); }}>保存</button>
-                <button onClick={() => { handleSync(); setIsMobileMenuOpen(false); }} disabled={googleDriveStatus !== 'connected'}>同期</button>
-                <button className="help-button" onClick={() => { setIsSaveHelpOpen(true); setIsMobileMenuOpen(false); }}>？</button>
+                <button onClick={() => { handleSave(); setIsMobileMenuOpen(false); }} title="保存"><span className="material-icons">backup</span></button>
+                <button onClick={() => { handleSync(); setIsMobileMenuOpen(false); }} disabled={googleDriveStatus !== 'connected'} title="同期"><span className="material-icons">cloud_sync</span></button>
+                <button className="help-button" onClick={() => { setIsSaveHelpOpen(true); setIsMobileMenuOpen(false); }} title="ヘルプ"><span className="material-icons">help</span></button>
               </div>
               <div className="mobile-menu-divider"></div>
               <div className="mobile-tool-group">
-                <label>ペンの太さ: {penWidth}px</label>
+                <span className="material-icons" title="ペンの太さ">line_weight</span>
                 <input
                   type="range"
                   min="1"
@@ -1069,9 +1065,10 @@ function AppContent({ firebaseUser, onSignOut }: { firebaseUser: User, onSignOut
                   value={penWidth}
                   onChange={(e) => setPenWidth(Number(e.target.value))}
                 />
+                <span>{penWidth}px</span>
               </div>
               <div className="mobile-tool-group">
-                <label>ペンの色:</label>
+                <span className="material-icons" title="ペンの色">color_lens</span>
                 <input
                   type="color"
                   value={penColor}
@@ -1082,28 +1079,30 @@ function AppContent({ firebaseUser, onSignOut }: { firebaseUser: User, onSignOut
                 <button
                   className={touchMode === 'default' ? 'active' : ''}
                   onClick={() => setTouchMode('default')}
+                  title="デフォルト"
                 >
-                  デフォルト
+                  <span className="material-icons">open_with</span>
                 </button>
                 <button
                   className={touchMode === 'draw' ? 'active' : ''}
                   onClick={() => setTouchMode('draw')}
+                  title="指で書く"
                 >
-                  指で書く
+                  <span className="material-icons">gesture</span>
                 </button>
               </div>
               <div className="mobile-button-row">
-                <button className={toolMode === 'pen' ? 'active' : ''} onClick={() => setToolMode('pen')}>ペン</button>
-                <button className={toolMode === 'eraser' ? 'active' : ''} onClick={() => setToolMode('eraser')}>消しゴム</button>
+                <button className={toolMode === 'pen' ? 'active' : ''} onClick={() => setToolMode('pen')} title="ペン"><span className="material-icons">edit</span></button>
+                <button className={toolMode === 'eraser' ? 'active' : ''} onClick={() => setToolMode('eraser')} title="消しゴム"><span className="material-icons">auto_fix_high</span></button>
               </div>
               <div className="mobile-button-row">
-                <button onClick={handleZoomOut}>-</button>
-                <button onClick={handleZoomIn}>+</button>
-                <button onClick={handleResetZoom}>リセット</button>
+                <button onClick={handleZoomOut} title="ズームアウト"><span className="material-icons">zoom_out</span></button>
+                <button onClick={handleZoomIn} title="ズームイン"><span className="material-icons">zoom_in</span></button>
+                <button onClick={handleResetZoom} title="リセット"><span className="material-icons">refresh</span></button>
               </div>
               <div className="mobile-menu-divider"></div>
-              <button onClick={() => { setIsClearConfirmOpen(true); setIsMobileMenuOpen(false); }}>クリア</button>
-              <button onClick={() => setIsMobileMenuOpen(false)} className="close-menu">閉じる</button>
+              <button onClick={() => { setIsClearConfirmOpen(true); setIsMobileMenuOpen(false); }} title="クリア"><RemoveSelectionIcon className="icon" /></button>
+              <button onClick={() => setIsMobileMenuOpen(false)} className="close-menu" title="閉じる"><span className="material-icons">close</span></button>
             </div>
           </div>
         </div>
@@ -1139,14 +1138,14 @@ function AppContent({ firebaseUser, onSignOut }: { firebaseUser: User, onSignOut
             <div className="memo-list-actions">
               <span className="login-user">{firebaseUser.displayName ?? firebaseUser.email}</span>
               {googleDriveStatus === 'connected' ? (
-                <button onClick={handleGoogleDriveDisconnect}>Google Driveを切断</button>
+                <button onClick={handleGoogleDriveDisconnect} title="Google Driveを切断"><span className="material-icons">cloud_off</span></button>
               ) : (
-                <button onClick={handleGoogleDriveConnect} disabled={googleDriveStatus === 'connecting'}>
-                  {googleDriveStatus === 'connecting' ? '連携中...' : 'Google Driveに保存する'}
+                <button onClick={handleGoogleDriveConnect} disabled={googleDriveStatus === 'connecting'} title={googleDriveStatus === 'connecting' ? '連携中...' : 'Google Driveに接続'}>
+                  {googleDriveStatus === 'connecting' ? <span className="material-icons" style={{animation: 'spin 1s linear infinite'}}>sync</span> : <span className="material-icons">cloud</span>}
                 </button>
               )}
-              <button onClick={handleNewMemo}>新規作成</button>
-              <button className="signout-button" onClick={onSignOut}>ログアウト</button>
+              <button onClick={handleNewMemo} title="新規作成"><span className="material-icons">post_add</span></button>
+              <button className="signout-button" onClick={onSignOut} title="ログアウト"><span className="material-icons">logout</span></button>
             </div>
           </div>
           {memoList.length === 0 ? (
@@ -1159,11 +1158,11 @@ function AppContent({ firebaseUser, onSignOut }: { firebaseUser: User, onSignOut
                     <span className="memo-list-title">{memo.title}</span>
                     <span className="memo-list-meta">作成: {formatDateTime(memo.createdAt)}</span>
                     <span className="memo-list-meta">更新: {formatDateTime(memo.updatedAt)}</span>
-                    <button className="delete-button mobile-delete-button" onClick={(e) => { e.stopPropagation(); setDeleteTargetMemo(memo); }}>削除</button>
+                    <button className="delete-button mobile-delete-button" onClick={(e) => { e.stopPropagation(); setDeleteTargetMemo(memo); }} title="削除"><span className="material-icons">delete_outline</span></button>
                   </div>
                   <div className="memo-list-right">
                     <MemoThumbnail lines={memo.lines} />
-                    <button className="delete-button desktop-delete-button" onClick={(e) => { e.stopPropagation(); setDeleteTargetMemo(memo); }}>削除</button>
+                    <button className="delete-button desktop-delete-button" onClick={(e) => { e.stopPropagation(); setDeleteTargetMemo(memo); }} title="削除"><span className="material-icons">delete_outline</span></button>
                   </div>
                 </div>
               ))}
