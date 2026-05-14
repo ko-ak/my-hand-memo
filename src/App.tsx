@@ -1054,10 +1054,11 @@ function AppContent({ firebaseUser, onSignOut }: { firebaseUser: User, onSignOut
         <div className="mobile-menu-overlay" onClick={() => setIsMobileMenuOpen(false)}>
           <div className="mobile-menu" onClick={(e) => e.stopPropagation()}>
             <div className="mobile-menu-content">
-              <button onClick={() => { handleSync(); setIsMobileMenuOpen(false); }} disabled={googleDriveStatus !== 'connected'}>同期</button>
               <button onClick={() => { handleSave(); setIsMobileMenuOpen(false); }}>保存</button>
-              <button className="help-button" onClick={() => { setIsSaveHelpOpen(true); setIsMobileMenuOpen(false); }}>？</button>
-              <button onClick={() => { setIsClearConfirmOpen(true); setIsMobileMenuOpen(false); }}>クリア</button>
+              <div className="mobile-button-row">
+                <button className="help-button" onClick={() => { setIsSaveHelpOpen(true); setIsMobileMenuOpen(false); }}>？</button>
+                <button onClick={() => { setIsClearConfirmOpen(true); setIsMobileMenuOpen(false); }}>クリア</button>
+              </div>
               <div className="mobile-menu-divider"></div>
               <div className="mobile-tool-group">
                 <label>ペンの太さ: {penWidth}px</label>
@@ -1077,20 +1078,31 @@ function AppContent({ firebaseUser, onSignOut }: { firebaseUser: User, onSignOut
                   onChange={(e) => setPenColor(e.target.value)}
                 />
               </div>
-              <button
-                className={touchMode === 'default' ? 'active' : ''}
-                onClick={() => setTouchMode('default')}
-              >
-                移動
-              </button>
-              <button
-                className={touchMode === 'draw' ? 'active' : ''}
-                onClick={() => setTouchMode('draw')}
-              >
-                指で書く
-              </button>
+              <div className="mobile-button-row">
+                <button
+                  className={touchMode === 'default' ? 'active' : ''}
+                  onClick={() => setTouchMode('default')}
+                >
+                  デフォルト
+                </button>
+                <button
+                  className={touchMode === 'draw' ? 'active' : ''}
+                  onClick={() => setTouchMode('draw')}
+                >
+                  指で書く
+                </button>
+              </div>
+              <div className="mobile-button-row">
+                <button className={toolMode === 'pen' ? 'active' : ''} onClick={() => setToolMode('pen')}>ペン</button>
+                <button className={toolMode === 'eraser' ? 'active' : ''} onClick={() => setToolMode('eraser')}>消しゴム</button>
+              </div>
+              <div className="mobile-button-row">
+                <button onClick={handleZoomOut}>-</button>
+                <button onClick={handleZoomIn}>+</button>
+                <button onClick={handleResetZoom}>リセット</button>
+              </div>
+              <button onClick={() => setIsMobileMenuOpen(false)} className="close-menu">閉じる</button>
             </div>
-            <button onClick={() => setIsMobileMenuOpen(false)} className="close-menu">閉じる</button>
           </div>
         </div>
       )}

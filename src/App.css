@@ -465,6 +465,16 @@ button.active {
   padding-bottom: 10px;
 }
 
+.mobile-button-row {
+  display: flex;
+  gap: 8px;
+}
+
+.mobile-button-row button {
+  flex: 1;
+  text-align: center;
+}
+
 .mobile-menu button {
   min-height: 44px;
   font-size: 16px;
