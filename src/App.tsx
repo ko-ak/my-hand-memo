@@ -1054,8 +1054,10 @@ function AppContent({ firebaseUser, onSignOut }: { firebaseUser: User, onSignOut
         <div className="mobile-menu-overlay" onClick={() => setIsMobileMenuOpen(false)}>
           <div className="mobile-menu" onClick={(e) => e.stopPropagation()}>
             <div className="mobile-menu-content">
+              <button onClick={() => { handleSync(); setIsMobileMenuOpen(false); }} disabled={googleDriveStatus !== 'connected'}>同期</button>
               <button onClick={() => { handleSave(); setIsMobileMenuOpen(false); }}>保存</button>
               <button className="help-button" onClick={() => { setIsSaveHelpOpen(true); setIsMobileMenuOpen(false); }}>？</button>
+              <button onClick={() => { setIsClearConfirmOpen(true); setIsMobileMenuOpen(false); }}>クリア</button>
               <div className="mobile-menu-divider"></div>
               <div className="mobile-tool-group">
                 <label>ペンの太さ: {penWidth}px</label>
