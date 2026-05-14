@@ -968,10 +968,10 @@ function AppContent({ firebaseUser, onSignOut }: { firebaseUser: User, onSignOut
             <button className="mobile-menu-button" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} aria-label="メニュー">☰</button>
           </span>
           <span className="desktop-toolbar">
-            <button className={toolMode === 'pen' ? 'active' : ''} onClick={() => setToolMode('pen')}>ペン</button>
+            <button onClick={handleSync} disabled={googleDriveStatus !== 'connected'} title={googleDriveStatus !== 'connected' ? 'Google Drive未連携' : '同期'}>同期</button>
             <button onClick={handleSave}>保存</button>
             <button className="help-button" onClick={() => setIsSaveHelpOpen(true)}>?</button>
-            <button className={touchMode === 'draw' ? 'active' : ''} onClick={() => setTouchMode(touchMode === 'draw' ? 'default' : 'draw')}>手書き</button>
+            <button onClick={() => setIsClearConfirmOpen(true)}>クリア</button>
           </span>
         </div>
         <div className="toolbar-right">
