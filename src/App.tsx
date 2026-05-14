@@ -123,6 +123,16 @@ function AppContent({ firebaseUser, onSignOut }: { firebaseUser: User, onSignOut
         }
         setGoogleDriveStatus('connected')
         await loadMemoList()
+        // 認証後にローカルにあるがDriveにないファイルをアップロード
+        const allMemos = await indexedDBHelper.getAllMemos()
+        const driveFiles = await googleDriveHelper.listFiles(folder.id)
+        for (const memo of allMemos) {
+          const driveFile = driveFiles.find(f => f.id === memo.googleDriveFileId)
+          if (shouldUploadMemo(memo, driveFile)) {
+            await syncMemoToGoogleDrive(memo, folder.id)
+          }
+        }
+        await loadMemoList()
       } catch (error) {
         console.error('Google Driveフォルダ作成エラー:', error)
         alert('Google Driveフォルダの作成に失敗しました')
@@ -284,14 +294,6 @@ function AppContent({ firebaseUser, onSignOut }: { firebaseUser: User, onSignOut
           }
         }
 
-        // ローカルからドライブへのアップロード
-        const finalMemos = await indexedDBHelper.getAllMemos()
-        for (const memo of finalMemos) {
-          const googleDriveFile = googleDriveFiles.find(file => file.id === memo.googleDriveFileId)
-          if (shouldUploadMemo(memo, googleDriveFile)) {
-            await syncMemoToGoogleDrive(memo, googleDriveFolderId)
-          }
-        }
       } catch (error) {
         console.error('Google Drive同期エラー:', error)
       }
@@ -736,19 +738,21 @@ function AppContent({ firebaseUser, onSignOut }: { firebaseUser: User, onSignOut
     // ローカルに保存
     await indexedDBHelper.saveMemo(memo)
     lastSavedSnapshotRef.current = JSON.stringify({ memoId, memoTitle, lines })
-    await loadMemoList()
     
     // Google Driveに保存（連携済みの場合）
     if (googleDriveStatus === 'connected' && googleDriveFolderId) {
       try {
-        await syncMemoToGoogleDrive(memo, googleDriveFolderId)
+        const syncedMemo = await syncMemoToGoogleDrive(memo, googleDriveFolderId)
+        setMemoTitle(syncedMemo.title)
         await loadMemoList()
         alert('保存しました（Google Driveにも保存されました）')
       } catch (error) {
         console.error('Google Drive保存エラー:', error)
+        await loadMemoList()
         alert('ローカルに保存しましたが、Google Driveへの保存に失敗しました')
       }
     } else {
+      await loadMemoList()
       alert('保存しました')
     }
   }
