@@ -450,22 +450,40 @@ button.active {
   background: white;
   width: 280px;
   height: 100%;
-  padding: 20px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  overflow-y: auto;
   box-shadow: -4px 0 20px rgba(0,0,0,0.15);
 }
 
+.mobile-menu-content {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 10px;
+}
+
 .mobile-menu button {
-  min-height: 48px;
+  min-height: 44px;
   font-size: 16px;
-  padding: 12px 16px;
+  padding: 10px 14px;
   text-align: left;
   border: 1px solid #ddd;
   border-radius: 8px;
   background: #f8f8f8;
+  flex-shrink: 0;
+}
+
+.mobile-menu button.help-button {
+  min-width: unset;
+  width: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 20px;
+  text-align: center;
 }
 
 .mobile-menu button.active {
@@ -475,10 +493,11 @@ button.active {
 }
 
 .mobile-menu button.close-menu {
-  margin-top: auto;
+  flex-shrink: 0;
   background: #333;
   color: white;
   text-align: center;
+  margin-top: 10px;
 }
 
 .mobile-menu-divider {

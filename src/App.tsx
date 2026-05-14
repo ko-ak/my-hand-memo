@@ -1053,39 +1053,41 @@ function AppContent({ firebaseUser, onSignOut }: { firebaseUser: User, onSignOut
       {isMobileMenuOpen && (
         <div className="mobile-menu-overlay" onClick={() => setIsMobileMenuOpen(false)}>
           <div className="mobile-menu" onClick={(e) => e.stopPropagation()}>
-            <button onClick={() => { handleSave(); setIsMobileMenuOpen(false); }}>保存</button>
-            <button className="help-button" onClick={() => { setIsSaveHelpOpen(true); setIsMobileMenuOpen(false); }}>?</button>
-            <div className="mobile-menu-divider"></div>
-            <div className="mobile-tool-group">
-              <label>ペンの太さ: {penWidth}px</label>
-              <input
-                type="range"
-                min="1"
-                max="20"
-                value={penWidth}
-                onChange={(e) => setPenWidth(Number(e.target.value))}
-              />
+            <div className="mobile-menu-content">
+              <button onClick={() => { handleSave(); setIsMobileMenuOpen(false); }}>保存</button>
+              <button className="help-button" onClick={() => { setIsSaveHelpOpen(true); setIsMobileMenuOpen(false); }}>？</button>
+              <div className="mobile-menu-divider"></div>
+              <div className="mobile-tool-group">
+                <label>ペンの太さ: {penWidth}px</label>
+                <input
+                  type="range"
+                  min="1"
+                  max="20"
+                  value={penWidth}
+                  onChange={(e) => setPenWidth(Number(e.target.value))}
+                />
+              </div>
+              <div className="mobile-tool-group">
+                <label>ペンの色:</label>
+                <input
+                  type="color"
+                  value={penColor}
+                  onChange={(e) => setPenColor(e.target.value)}
+                />
+              </div>
+              <button
+                className={touchMode === 'default' ? 'active' : ''}
+                onClick={() => setTouchMode('default')}
+              >
+                移動
+              </button>
+              <button
+                className={touchMode === 'draw' ? 'active' : ''}
+                onClick={() => setTouchMode('draw')}
+              >
+                指で書く
+              </button>
             </div>
-            <div className="mobile-tool-group">
-              <label>ペンの色:</label>
-              <input
-                type="color"
-                value={penColor}
-                onChange={(e) => setPenColor(e.target.value)}
-              />
-            </div>
-            <button 
-              className={touchMode === 'default' ? 'active' : ''}
-              onClick={() => setTouchMode('default')}
-            >
-              移動
-            </button>
-            <button 
-              className={touchMode === 'draw' ? 'active' : ''}
-              onClick={() => setTouchMode('draw')}
-            >
-              指で書く
-            </button>
             <button onClick={() => setIsMobileMenuOpen(false)} className="close-menu">閉じる</button>
           </div>
         </div>
