@@ -4,6 +4,12 @@
   height: 100vh;
   margin: 0;
   padding: 0;
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
+* {
+  box-sizing: border-box;
 }
 
 .toolbar {
@@ -590,15 +596,19 @@ button.active {
 
   .memo-list-container {
     padding: 12px;
+    overflow-x: hidden;
   }
 
   .memo-list {
     grid-template-columns: 1fr;
     gap: 12px;
+    width: 100%;
+    min-width: 0;
   }
 
   .memo-list-item {
     width: 100%;
+    max-width: 100%;
     min-width: unset;
     height: auto;
     flex-direction: row;
@@ -615,6 +625,7 @@ button.active {
 
   .memo-list-right {
     flex: 1;
+    min-width: 0;
     display: flex;
     flex-direction: column;
     align-items: center;
