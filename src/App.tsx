@@ -724,7 +724,15 @@ function AppContent({ firebaseUser, onSignOut }: { firebaseUser: User, onSignOut
     setMemoTitle(e.target.value)
   }
 
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveProgress, setSaveProgress] = useState(0)
+  const [saveStatus, setSaveStatus] = useState('')
+
   const handleSave = async () => {
+    setIsSaving(true)
+    setSaveProgress(0)
+    setSaveStatus('ローカルに保存中...')
+
     const existingMemo = (await indexedDBHelper.getAllMemos()).find(memo => memo.id === memoId)
     const memo: Memo = {
       id: memoId,
@@ -738,22 +746,33 @@ function AppContent({ firebaseUser, onSignOut }: { firebaseUser: User, onSignOut
     // ローカルに保存
     await indexedDBHelper.saveMemo(memo)
     lastSavedSnapshotRef.current = JSON.stringify({ memoId, memoTitle, lines })
+    setSaveProgress(30)
     
     // Google Driveに保存（連携済みの場合）
     if (googleDriveStatus === 'connected' && googleDriveFolderId) {
+      setSaveStatus('Google Driveにアップロード中...')
       try {
         const syncedMemo = await syncMemoToGoogleDrive(memo, googleDriveFolderId)
+        setSaveProgress(100)
         setMemoTitle(syncedMemo.title)
         await loadMemoList()
-        alert('保存しました（Google Driveにも保存されました）')
+        setTimeout(() => {
+          setIsSaving(false)
+          alert('保存しました（Google Driveにも保存されました）')
+        }, 300)
       } catch (error) {
         console.error('Google Drive保存エラー:', error)
         await loadMemoList()
+        setIsSaving(false)
         alert('ローカルに保存しましたが、Google Driveへの保存に失敗しました')
       }
     } else {
+      setSaveProgress(100)
       await loadMemoList()
-      alert('保存しました')
+      setTimeout(() => {
+        setIsSaving(false)
+        alert('保存しました')
+      }, 300)
     }
   }
 
@@ -1032,6 +1051,18 @@ function AppContent({ firebaseUser, onSignOut }: { firebaseUser: User, onSignOut
               <button className="cancel-button" onClick={() => setIsReauthPromptOpen(false)}>いいえ</button>
               <button className="delete-confirm-button" onClick={() => { setIsReauthPromptOpen(false); handleGoogleDriveConnect(); }}>はい</button>
             </div>
+          </div>
+        </div>
+      )}
+      {isSaving && (
+        <div className="modal-overlay">
+          <div className="progress-modal">
+            <h3>保存中...</h3>
+            <p>{saveStatus}</p>
+            <div className="progress-bar-container">
+              <div className="progress-bar" style={{ width: `${saveProgress}%` }}></div>
+            </div>
+            <p className="progress-percent">{saveProgress}%</p>
           </div>
         </div>
       )}
