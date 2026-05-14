@@ -1159,10 +1159,11 @@ function AppContent({ firebaseUser, onSignOut }: { firebaseUser: User, onSignOut
                     <span className="memo-list-title">{memo.title}</span>
                     <span className="memo-list-meta">作成: {formatDateTime(memo.createdAt)}</span>
                     <span className="memo-list-meta">更新: {formatDateTime(memo.updatedAt)}</span>
+                    <button className="delete-button mobile-delete-button" onClick={(e) => { e.stopPropagation(); setDeleteTargetMemo(memo); }}>削除</button>
                   </div>
                   <div className="memo-list-right">
                     <MemoThumbnail lines={memo.lines} />
-                    <button className="delete-button" onClick={(e) => { e.stopPropagation(); setDeleteTargetMemo(memo); }}>削除</button>
+                    <button className="delete-button desktop-delete-button" onClick={(e) => { e.stopPropagation(); setDeleteTargetMemo(memo); }}>削除</button>
                   </div>
                 </div>
               ))}

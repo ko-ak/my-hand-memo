@@ -224,6 +224,10 @@ button.active {
   flex-shrink: 0;
 }
 
+.mobile-delete-button {
+  display: none;
+}
+
 .delete-button {
   padding: 0.4em 1.2em;
   background-color: #dc3545;
@@ -637,6 +641,15 @@ button.active {
     width: 100%;
     padding: 8px;
     font-size: 14px;
+  }
+
+  .mobile-delete-button {
+    display: block;
+    margin-top: 8px;
+  }
+
+  .desktop-delete-button {
+    display: none;
   }
 
   .memo-list-header {
