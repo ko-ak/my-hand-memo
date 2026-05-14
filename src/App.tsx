@@ -968,10 +968,10 @@ function AppContent({ firebaseUser, onSignOut }: { firebaseUser: User, onSignOut
             <button className="mobile-menu-button" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} aria-label="メニュー">☰</button>
           </span>
           <span className="desktop-toolbar">
-            <button onClick={handleSync} disabled={googleDriveStatus !== 'connected'} title={googleDriveStatus !== 'connected' ? 'Google Drive未連携' : '同期'}>同期</button>
+            <button className={toolMode === 'pen' ? 'active' : ''} onClick={() => setToolMode('pen')}>ペン</button>
             <button onClick={handleSave}>保存</button>
             <button className="help-button" onClick={() => setIsSaveHelpOpen(true)}>?</button>
-            <button onClick={() => setIsClearConfirmOpen(true)}>クリア</button>
+            <button className={touchMode === 'draw' ? 'active' : ''} onClick={() => setTouchMode(touchMode === 'draw' ? 'default' : 'draw')}>手書き</button>
           </span>
         </div>
         <div className="toolbar-right">
@@ -1056,6 +1056,7 @@ function AppContent({ firebaseUser, onSignOut }: { firebaseUser: User, onSignOut
             <div className="mobile-menu-content">
               <div className="mobile-button-row">
                 <button onClick={() => { handleSave(); setIsMobileMenuOpen(false); }}>保存</button>
+                <button onClick={() => { handleSync(); setIsMobileMenuOpen(false); }} disabled={googleDriveStatus !== 'connected'}>同期</button>
                 <button className="help-button" onClick={() => { setIsSaveHelpOpen(true); setIsMobileMenuOpen(false); }}>？</button>
               </div>
               <div className="mobile-menu-divider"></div>
@@ -1100,6 +1101,8 @@ function AppContent({ firebaseUser, onSignOut }: { firebaseUser: User, onSignOut
                 <button onClick={handleZoomIn}>+</button>
                 <button onClick={handleResetZoom}>リセット</button>
               </div>
+              <div className="mobile-menu-divider"></div>
+              <button onClick={() => { setIsClearConfirmOpen(true); setIsMobileMenuOpen(false); }}>クリア</button>
               <button onClick={() => setIsMobileMenuOpen(false)} className="close-menu">閉じる</button>
             </div>
           </div>
